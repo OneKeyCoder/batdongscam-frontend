@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { Map, MapPin, Users, Building2, TrendingUp, PlusCircle, Search, Filter, ChevronDown } from 'lucide-react';
 import StatsGrid from '@/app/components/StatsGrid';
 import LocationsTable from '@/app/components/features/locations/LocationsTable';
-import LocationPicker from '@/app/components/features/locations/LocationPicker'; 
+import LocationPicker from '@/app/components/LocationPicker'; 
 import LocationAdvancedSearch from '@/app/components/features/locations/LocationAdvancedSearch'; 
 import Modal from '@/app/components/ui/Modal'; 
 
