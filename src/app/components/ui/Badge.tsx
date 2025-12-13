@@ -1,9 +1,10 @@
 import React from 'react';
 
-type BadgeVariant = 
+type BadgeVariant =
   | 'default' | 'success' | 'danger' | 'warning' | 'info' | 'pink' | 'gold'
   | 'deposit' | 'advance' | 'installment' | 'fullpay' | 'salary' | 'bonus'
-  | 'monthly' | 'penalty' | 'refund' | 'sale' | 'rental' | 'pending' | 'failed';
+  | 'monthly' | 'penalty' | 'refund' | 'sale' | 'rental' | 'pending' | 'failed' 
+  | 'scam' | 'spam' | 'reported' | 'resolved';
 
 interface BadgeProps {
   children: React.ReactNode;
@@ -35,6 +36,12 @@ export default function Badge({ children, variant = 'default', className = '' }:
     rental: 'bg-yellow-100 text-yellow-700 border-yellow-200',
     pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
     failed: 'bg-red-200 text-red-800 border-red-300',
+
+    // --- NEW VIOLATION STYLES ---
+    scam: 'bg-red-800 text-white border-red-900', 
+    spam: 'bg-amber-600 text-white border-amber-700', 
+    reported: 'bg-red-50 text-red-600 border-red-100',
+    resolved: 'bg-green-50 text-green-600 border-green-100', 
   };
 
   return (
