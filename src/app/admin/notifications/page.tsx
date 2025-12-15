@@ -11,7 +11,7 @@ const initialNotifications = Array(10).fill(null).map((_, i) => ({
     sentAt: "12:52:14 - October 10th, 2025",
     readAt: i % 3 === 0 ? null : "12:55:00 - October 10th, 2025", // Mock read/unread
     isRead: i % 3 !== 0, // i chia hết cho 3 là chưa đọc (False)
-    content: "Ly Hua too sexy Lorem ipsum dolor sit amet consectetur adipiscing elit.",
+    content: "Ly Hua too sexy",
     image: `https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&q=80&w=500&ixlib=rb-4.0.3`
 }));
 
