@@ -1,32 +1,130 @@
 import apiClient from '../client';
-import { PropertyCard, PropertyDetails, PropertyFilters, PaginatedResponse, SingleResponse } from '../types';
+import { PropertyCard, PropertyFilters, PaginatedResponse, SingleResponse } from '../types';
 
 const PROPERTY_ENDPOINTS = {
   CARDS: '/public/properties/cards',
   DETAILS: (id: string) => `/public/properties/${id}`,
-  CREATE: '/properties',
-  UPDATE: (id: string) => `/properties/${id}`,
-  DELETE: (id: string) => `/properties/${id}`,
-  ASSIGN_AGENT: (id: string) => `/properties/${id}/assign-agent`,
+  PROPERTIES: '/properties',
+  PROPERTY_DETAIL: (id: string) => `/properties/${id}`,
+  PROPERTY_STATUS: (id: string) => `/properties/${id}/status`,
+  ASSIGN_AGENT: (propertyId: string, agentId: string) => `/properties/${propertyId}/assign-agent/${agentId}`,
+  PROPERTY_TYPES: '/properties/types',
+  PROPERTY_TYPE_DETAIL: (id: string) => `/properties/types/${id}`,
 };
 
 export interface CreatePropertyRequest {
+  ownerId?: string;
+  propertyTypeId: string;
+  wardId: string;
   title: string;
   description: string;
-  fullAddress: string;
-  wardId: string;
-  propertyTypeId: string;
-  transactionType: 'SALE' | 'RENT';
-  priceAmount: number;
+  transactionType: 'SALE' | 'RENTAL';
+  fullAddress?: string;
   area: number;
-  bedrooms?: number;
+  rooms?: number;
   bathrooms?: number;
   floors?: number;
-  rooms?: number;
-  orientation?: string;
-  amenities?: string;
+  bedrooms?: number;
+  houseOrientation?: 'NORTH' | 'SOUTH' | 'EAST' | 'WEST' | 'NORTH_EAST' | 'NORTH_WEST' | 'SOUTH_EAST' | 'SOUTH_WEST' | 'UNKNOWN';
+  balconyOrientation?: 'NORTH' | 'SOUTH' | 'EAST' | 'WEST' | 'NORTH_EAST' | 'NORTH_WEST' | 'SOUTH_EAST' | 'SOUTH_WEST' | 'UNKNOWN';
   yearBuilt?: number;
-  documents?: any[];
+  priceAmount: number;
+  amenities?: string;
+}
+
+export interface UpdatePropertyRequest extends CreatePropertyRequest {
+  mediaIdsToRemove?: string[];
+}
+
+export interface UpdatePropertyStatusRequest {
+  status: 'PENDING' | 'REJECTED' | 'APPROVED' | 'SOLD' | 'RENTED' | 'AVAILABLE' | 'UNAVAILABLE' | 'REMOVED' | 'DELETED';
+}
+
+export interface CreatePropertyTypeRequest {
+  typeName: string;
+  avatar?: File;
+  description?: string;
+  isActive?: boolean;
+}
+
+export interface UpdatePropertyTypeRequest {
+  id: string;
+  typeName?: string;
+  avatar?: File;
+  description?: string;
+  isActive?: boolean;
+}
+
+//RESPONSE INTERFACES
+export interface MediaResponse {
+  id: string;
+  filePath: string;
+  mediaType: string;
+}
+
+export interface DocumentResponse {
+  id: string;
+  filePath: string;
+  documentType: string;
+}
+
+export interface SimpleUserResponse {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email?: string;
+  phoneNumber?: string;
+  avatarUrl?: string;
+  tier?: string;
+}
+
+export interface PropertyTypeResponse {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  typeName: string;
+  avatarUrl?: string;
+  description?: string;
+  isActive?: boolean;
+}
+
+export interface PropertyDetails {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  owner: SimpleUserResponse;
+  assignedAgent?: SimpleUserResponse;
+  serviceFeeAmount?: number;
+  serviceFeeCollectedAmount?: number;
+  propertyTypeId: string;
+  propertyTypeName: string;
+  wardId: string;
+  wardName: string;
+  districtId: string;
+  districtName: string;
+  cityId: string;
+  cityName: string;
+  title: string;
+  description: string;
+  transactionType: string;
+  fullAddress?: string;
+  area: number;
+  rooms?: number;
+  bathrooms?: number;
+  floors?: number;
+  bedrooms?: number;
+  houseOrientation?: string;
+  balconyOrientation?: string;
+  yearBuilt?: number;
+  priceAmount: number;
+  pricePerSquareMeter?: number;
+  commissionRate?: number;
+  amenities?: string;
+  status: string;
+  viewCount?: number;
+  approvedAt?: string;
+  mediaList: MediaResponse[];
+  documentList: DocumentResponse[];
 }
 
 export const propertyService = {
@@ -78,7 +176,7 @@ export const propertyService = {
     const response = await apiClient.get<PaginatedResponse<PropertyCard>>(
       `${PROPERTY_ENDPOINTS.CARDS}?${params.toString()}`
     );
-    
+
     return response.data;
   },
 
@@ -98,30 +196,22 @@ export const propertyService = {
    */
   async createProperty(
     data: CreatePropertyRequest,
-    images?: File[],
-    documents?: File[]
+    images?: File[]
   ): Promise<PropertyDetails> {
     const formData = new FormData();
-    
-    // Add JSON payload as a blob
-    formData.append('payload', new Blob([JSON.stringify(data)], { type: 'application/json' }));
-    
+
+    // Add JSON payload
+    formData.append('payload', JSON.stringify(data));
+
     // Add images if provided
     if (images && images.length > 0) {
       images.forEach(image => {
         formData.append('images', image);
       });
     }
-    
-    // Add documents if provided
-    if (documents && documents.length > 0) {
-      documents.forEach(doc => {
-        formData.append('documents', doc);
-      });
-    }
-    
+
     const response = await apiClient.post<SingleResponse<PropertyDetails>>(
-      PROPERTY_ENDPOINTS.CREATE,
+      PROPERTY_ENDPOINTS.PROPERTIES,
       formData,
       {
         headers: {
@@ -138,31 +228,23 @@ export const propertyService = {
    */
   async updateProperty(
     id: string,
-    data: Partial<CreatePropertyRequest>,
-    images?: File[],
-    documents?: File[]
+    data: UpdatePropertyRequest,
+    images?: File[]
   ): Promise<PropertyDetails> {
     const formData = new FormData();
-    
-    // Add JSON payload as a blob
-    formData.append('payload', new Blob([JSON.stringify(data)], { type: 'application/json' }));
-    
+
+    // Add JSON payload
+    formData.append('payload', JSON.stringify(data));
+
     // Add images if provided
     if (images && images.length > 0) {
       images.forEach(image => {
         formData.append('images', image);
       });
     }
-    
-    // Add documents if provided
-    if (documents && documents.length > 0) {
-      documents.forEach(doc => {
-        formData.append('documents', doc);
-      });
-    }
-    
+
     const response = await apiClient.put<SingleResponse<PropertyDetails>>(
-      PROPERTY_ENDPOINTS.UPDATE(id),
+      PROPERTY_ENDPOINTS.PROPERTY_DETAIL(id),
       formData,
       {
         headers: {
@@ -171,20 +253,6 @@ export const propertyService = {
       }
     );
     return response.data.data;
-  },
-
-  /**
-   * Delete property (Owner only)
-   */
-  async deleteProperty(id: string): Promise<void> {
-    await apiClient.delete(PROPERTY_ENDPOINTS.DELETE(id));
-  },
-
-  /**
-   * Assign agent to property (Owner only)
-   */
-  async assignAgent(propertyId: string, agentId: string): Promise<void> {
-    await apiClient.post(PROPERTY_ENDPOINTS.ASSIGN_AGENT(propertyId), { agentId });
   },
 
   /**
@@ -205,6 +273,94 @@ export const propertyService = {
     // Note: Backend doesn't have keyword search in current API
     // This is a placeholder for future implementation
     return this.getPropertyCards(filters);
+  },
+
+  /**
+ * Update property status (Owner/Admin)
+ */
+  async updatePropertyStatus(
+    id: string,
+    data: UpdatePropertyStatusRequest
+  ): Promise<PropertyDetails> {
+    const response = await apiClient.patch<SingleResponse<PropertyDetails>>(
+      PROPERTY_ENDPOINTS.PROPERTY_STATUS(id),
+      data
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Delete property (Admin only)
+   */
+  async deleteProperty(id: string): Promise<void> {
+    await apiClient.delete<SingleResponse<void>>(
+      PROPERTY_ENDPOINTS.PROPERTY_DETAIL(id)
+    );
+  },
+
+  /**
+   * Assign agent to property (Admin only)
+   */
+  async assignAgentToProperty(propertyId: string, agentId: string): Promise<void> {
+    await apiClient.put<SingleResponse<void>>(
+      PROPERTY_ENDPOINTS.ASSIGN_AGENT(propertyId, agentId)
+    );
+  },
+
+  /**
+   * Create property type (Admin only)
+   */
+  async createPropertyType(data: CreatePropertyTypeRequest): Promise<PropertyTypeResponse> {
+    const formData = new FormData();
+
+    formData.append('typeName', data.typeName);
+    if (data.avatar) formData.append('avatar', data.avatar);
+    if (data.description) formData.append('description', data.description);
+    if (data.isActive !== undefined) formData.append('isActive', data.isActive.toString());
+
+    const response = await apiClient.post<SingleResponse<PropertyTypeResponse>>(
+      PROPERTY_ENDPOINTS.PROPERTY_TYPES,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Update property type (Admin only)
+   */
+  async updatePropertyType(data: UpdatePropertyTypeRequest): Promise<PropertyTypeResponse> {
+    const formData = new FormData();
+
+    formData.append('id', data.id);
+    if (data.typeName) formData.append('typeName', data.typeName);
+    if (data.avatar) formData.append('avatar', data.avatar);
+    if (data.description) formData.append('description', data.description);
+    if (data.isActive !== undefined) formData.append('isActive', data.isActive.toString());
+
+    const response = await apiClient.put<SingleResponse<PropertyTypeResponse>>(
+      PROPERTY_ENDPOINTS.PROPERTY_TYPES,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Delete property type (Admin only)
+   */
+  async deletePropertyType(id: string): Promise<void> {
+    await apiClient.delete<SingleResponse<void>>(
+      PROPERTY_ENDPOINTS.PROPERTY_TYPE_DETAIL(id)
+    );
   },
 };
 

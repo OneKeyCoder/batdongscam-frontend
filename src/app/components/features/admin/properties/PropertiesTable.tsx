@@ -1,26 +1,39 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { Eye, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
-import Badge from '@/app/components/ui/Badge'; 
+import Badge from '@/app/components/ui/Badge';
+import Pagination from '@/app/components/Pagination';
 
 // Mock data 
 const mockProperties = Array(10).fill(null).map((_, index) => ({
-    id: index + 1,
-    image: 'https://placehold.co/60x60/e2e8f0/e2e8f0', 
-    name: "Property's Name",
-    area: '120 m²',
-    price: '541,00.00 $',
-    address: 'District 7, Tân Phú Ward',
-    type: 'House',
-    transaction: 'Sale',
-    status: 'Sold',
-    location: 'Hồ Chí Minh',
-    owner: { name: 'Nguyễn Văn A', tier: 'GOLD' },
-    agent: index % 2 === 0 ? { name: 'Nguyễn Văn A', tier: 'GOLD' } : null, 
+  id: index + 1,
+  image: 'https://placehold.co/60x60/e2e8f0/e2e8f0',
+  name: "Property's Name",
+  area: '120 m²',
+  price: '541,00.00 $',
+  address: 'District 7, Tân Phú Ward',
+  type: 'House',
+  transaction: 'Sale',
+  status: 'Sold',
+  location: 'Hồ Chí Minh',
+  owner: { name: 'Nguyễn Văn A', tier: 'GOLD' },
+  agent: index % 2 === 0 ? { name: 'Nguyễn Văn A', tier: 'GOLD' } : null,
 }));
 
 
 export default function PropertiesTable() {
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentProperties = mockProperties.slice(indexOfFirstItem, indexOfLastItem);
+
+  const handlePageChange = (pageNumber: number) => {
+    setCurrentPage(pageNumber);
+  };
+
   return (
     <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
       <div className="overflow-x-auto">
@@ -54,31 +67,31 @@ export default function PropertiesTable() {
                 <td className="px-6 py-4">
                   <Badge variant="danger">{item.transaction}</Badge>
                 </td>
-                 <td className="px-6 py-4">
+                <td className="px-6 py-4">
                   <Badge variant="success">{item.status}</Badge>
                 </td>
                 <td className="px-6 py-4 text-gray-900 font-medium">{item.location}</td>
                 {/* Owner Col */}
                 <td className="px-6 py-4">
-                    <p className="text-gray-900 font-medium">{item.owner.name}</p>
-                    <Badge variant="gold" className="mt-1">{item.owner.tier}</Badge>
+                  <p className="text-gray-900 font-medium">{item.owner.name}</p>
+                  <Badge variant="gold" className="mt-1">{item.owner.tier}</Badge>
                 </td>
-                 {/* Agent Col */}
+                {/* Agent Col */}
                 <td className="px-6 py-4">
-                    {item.agent ? (
-                        <>
-                            <p className="text-gray-900 font-medium">{item.agent.name}</p>
-                            <Badge variant="gold" className="mt-1">{item.agent.tier}</Badge>
-                        </>
-                    ) : (
-                        <span className="text-gray-400">---</span>
-                    )}
+                  {item.agent ? (
+                    <>
+                      <p className="text-gray-900 font-medium">{item.agent.name}</p>
+                      <Badge variant="gold" className="mt-1">{item.agent.tier}</Badge>
+                    </>
+                  ) : (
+                    <span className="text-gray-400">---</span>
+                  )}
 
                 </td>
                 <td className="px-6 py-4 text-right">
-                    <Link href={`/admin/properties/${item.id}`} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg inline-flex items-center justify-center transition-colors" title="View Details">
-                        <Eye className="w-5 h-5" />
-                    </Link>
+                  <Link href={`/admin/properties/${item.id}`} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg inline-flex items-center justify-center transition-colors" title="View Details">
+                    <Eye className="w-5 h-5" />
+                  </Link>
                 </td>
               </tr>
             ))}
@@ -86,23 +99,13 @@ export default function PropertiesTable() {
         </table>
       </div>
 
-      {/* Pagination Footer */}
-      <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50">
-          <p className="text-sm text-gray-700">
-            Showing <span className="font-medium">1-10</span> of <span className="font-medium">97</span>
-          </p>
-          <div className="flex items-center gap-2">
-                <button className="p-2 border border-gray-300 rounded-lg hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                    <ChevronLeft className="w-5 h-5 text-gray-600" />
-                </button>
-                 <button className="p-2 border border-gray-300 rounded-lg hover:bg-white text-gray-700 font-medium">
-                    1/10
-                </button>
-                 <button className="p-2 border border-gray-300 rounded-lg hover:bg-white">
-                    <ChevronRight className="w-5 h-5 text-gray-600" />
-                </button>
-          </div>
-      </div>
+      {/* Pagination */}
+      <Pagination
+        currentPage={currentPage}
+        totalItems={mockProperties.length}
+        pageSize={itemsPerPage}
+        onPageChange={handlePageChange}
+      />
     </div>
   );
 }

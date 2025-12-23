@@ -1,23 +1,36 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { Eye } from 'lucide-react';
 import Badge from '@/app/components/ui/Badge';
+import Pagination from '@/app/components/Pagination';
 
 const appointments = Array(10).fill(null).map((_, i) => ({
-    id: i + 1,
-    property: "Property's Name",
-    time: "7:00 PM January 2nd, 2025",
-    status: i % 3 === 0 ? "Pending" : "Completed",
-    location: "Hồ Chí Minh",
-    customer: "Nguyễn Văn A",
-    agent: i % 2 === 0 ? "Nguyễn Văn B" : "---",
-    customerTier: "GOLD",
-    agentTier: "GOLD"
+  id: i + 1,
+  property: "Property's Name",
+  time: "7:00 PM January 2nd, 2025",
+  status: i % 3 === 0 ? "Pending" : "Completed",
+  location: "Hồ Chí Minh",
+  customer: "Nguyễn Văn A",
+  agent: i % 2 === 0 ? "Nguyễn Văn B" : "---",
+  customerTier: "GOLD",
+  agentTier: "GOLD"
 }));
 
 export default function AppointmentTable() {
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentAgents = appointments.slice(indexOfFirstItem, indexOfLastItem);
+
+  const handlePageChange = (pageNumber: number) => {
+    setCurrentPage(pageNumber);
+  };
+
   return (
     <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
       <div className="overflow-x-auto">
@@ -37,38 +50,38 @@ export default function AppointmentTable() {
             {appointments.map((item) => (
               <tr key={item.id} className="hover:bg-gray-50 transition-colors">
                 <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gray-200 rounded-lg shrink-0"></div>
-                        <div>
-                            <p className="font-bold text-gray-900 text-xs">{item.property}</p>
-                            <p className="text-[10px] text-red-600 font-bold mt-0.5">541,00.00 $</p>
-                        </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-gray-200 rounded-lg shrink-0"></div>
+                    <div>
+                      <p className="font-bold text-gray-900 text-xs">{item.property}</p>
+                      <p className="text-[10px] text-red-600 font-bold mt-0.5">541,00.00 $</p>
                     </div>
+                  </div>
                 </td>
                 <td className="px-6 py-4 text-gray-900 font-medium w-[150px]">{item.time}</td>
                 <td className="px-6 py-4">
-                    <Badge variant={item.status === 'Pending' ? 'pending' : 'success'}>{item.status}</Badge>
+                  <Badge variant={item.status === 'Pending' ? 'pending' : 'success'}>{item.status}</Badge>
                 </td>
                 <td className="px-6 py-4 text-gray-900 font-medium">{item.location}</td>
                 <td className="px-6 py-4">
-                    <p className="font-bold text-gray-900 text-xs">{item.customer}</p>
-                    <Badge variant="gold" className="mt-1">{item.customerTier}</Badge>
+                  <p className="font-bold text-gray-900 text-xs">{item.customer}</p>
+                  <Badge variant="gold" className="mt-1">{item.customerTier}</Badge>
                 </td>
                 <td className="px-6 py-4">
-                    {item.agent !== '---' ? (
-                        <>
-                            <p className="font-bold text-gray-900 text-xs">{item.agent}</p>
-                            <Badge variant="gold" className="mt-1">{item.agentTier}</Badge>
-                        </>
-                    ) : <span className="text-gray-400">---</span>}
+                  {item.agent !== '---' ? (
+                    <>
+                      <p className="font-bold text-gray-900 text-xs">{item.agent}</p>
+                      <Badge variant="gold" className="mt-1">{item.agentTier}</Badge>
+                    </>
+                  ) : <span className="text-gray-400">---</span>}
                 </td>
                 <td className="px-6 py-4 text-right">
-                    <Link 
-                        href={`/admin/appointments/${item.id}`} 
-                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg inline-flex items-center justify-center transition-colors"
-                    >
-                        <Eye className="w-5 h-5" />
-                    </Link>
+                  <Link
+                    href={`/admin/appointments/${item.id}`}
+                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg inline-flex items-center justify-center transition-colors"
+                  >
+                    <Eye className="w-5 h-5" />
+                  </Link>
                 </td>
               </tr>
             ))}
@@ -76,14 +89,12 @@ export default function AppointmentTable() {
         </table>
       </div>
       {/* Pagination */}
-      <div className="px-6 py-4 border-t border-gray-100 bg-white text-sm text-gray-500 flex justify-between items-center">
-          <span>1-10 of 97</span>
-          <div className="flex gap-2">
-              <button className="w-8 h-8 flex items-center justify-center border rounded-lg bg-gray-50 text-gray-400 hover:bg-gray-100">&lt;</button>
-              <button className="w-8 h-8 flex items-center justify-center border rounded-lg bg-white text-gray-600 font-medium">1/10</button>
-              <button className="w-8 h-8 flex items-center justify-center border rounded-lg bg-white text-gray-600 hover:bg-gray-50">&gt;</button>
-          </div>
-      </div>
+      <Pagination
+        currentPage={currentPage}
+        totalItems={appointments.length}
+        pageSize={itemsPerPage}
+        onPageChange={handlePageChange}
+      />
     </div>
   );
 }

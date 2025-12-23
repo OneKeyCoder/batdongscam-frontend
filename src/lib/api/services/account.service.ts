@@ -1,5 +1,5 @@
 import apiClient from '../client';
-import { SingleResponse } from '../types';
+import { PaginatedResponse, SingleResponse } from '../types';
 
 const ACCOUNT_ENDPOINTS = {
   ME: '/account/me',
@@ -9,6 +9,12 @@ const ACCOUNT_ENDPOINTS = {
   UPDATE_BANK: '/account/me/bank',
   UPDATE_IDENTIFICATION: '/account/me/identification',
   GET_USER: (id: string) => `/account/${id}`,
+  UPDATE_USER: (id: string) => `/account/${id}`,
+  DELETE_USER: (id: string) => `/account/${id}`,
+  APPROVE_ACCOUNT: (propOwnerId: string, approve: boolean) => `/account/${propOwnerId}/${approve}/approve`,
+  SALE_AGENTS: '/account/sale-agents',
+  CUSTOMERS: '/account/customers',
+  PROPERTY_OWNERS: '/account/property-owners',
 };
 
 export interface UserProfile {
@@ -43,6 +49,59 @@ export interface UserProfile {
   statisticAll?: any;
 }
 
+export interface SaleAgentListItem {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  firstName: string;
+  lastName: string;
+  avatarUrl?: string;
+  ranking?: number;
+  employeeCode?: string;
+  point?: number;
+  tier?: string;
+  totalAssignments?: number;
+  propertiesAssigned?: number;
+  appointmentsAssigned?: number;
+  totalContracts?: number;
+  rating?: number;
+  totalRates?: number;
+  hiredDate?: string;
+  location?: string;
+}
+
+export interface CustomerListItem {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  firstName: string;
+  lastName: string;
+  avatarUrl?: string;
+  ranking?: number;
+  point?: number;
+  tier?: string;
+  totalSpending?: number;
+  totalViewings?: number;
+  totalContracts?: number;
+  location?: string;
+}
+
+export interface PropertyOwnerListItem {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  firstName: string;
+  lastName: string;
+  avatarUrl?: string;
+  ranking?: number;
+  point?: number;
+  tier?: string;
+  totalValue?: number;
+  totalProperties?: number;
+  location?: string;
+}
+
+// REQUEST
 export interface UpdateProfileRequest {
   firstName?: string;
   lastName?: string;
@@ -61,6 +120,115 @@ export interface UpdateBankRequest {
   bankAccountName?: string;
   bankAccountNumber?: string;
   bankBin?: string;
+}
+
+export interface UpdateAccountRequest {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phoneNumber?: string;
+  zaloContract?: string;
+  wardId?: string;
+  identificationNumber?: string;
+  dayOfBirth?: string;
+  gender?: string;
+  nation?: string;
+  issuedDate?: string;
+  issuingAuthority?: string;
+  avatar?: File;
+  frontIdPicture?: string;
+  backIdPicture?: string;
+}
+
+export interface SaleAgentFilters {
+  page?: number;
+  limit?: number;
+  sortType?: 'asc' | 'desc';
+  sortBy?: string;
+  name?: string;
+  month?: number;
+  year?: number;
+  agentTiers?: string[];
+  maxProperties?: number;
+  minPerformancePoint?: number;
+  maxPerformancePoint?: number;
+  minRanking?: number;
+  maxRanking?: number;
+  minAssignments?: number;
+  maxAssignments?: number;
+  minAssignedProperties?: number;
+  maxAssignedProperties?: number;
+  minAssignedAppointments?: number;
+  maxAssignedAppointments?: number;
+  minContracts?: number;
+  maxContracts?: number;
+  minAvgRating?: number;
+  maxAvgRating?: number;
+  hiredDateFrom?: string;
+  hiredDateTo?: string;
+  cityIds?: string[];
+  districtIds?: string[];
+  wardIds?: string[];
+}
+
+export interface CustomerFilters {
+  page?: number;
+  limit?: number;
+  sortType?: 'asc' | 'desc';
+  sortBy?: string;
+  name?: string;
+  month?: number;
+  year?: number;
+  customerTiers?: string[];
+  minLeadingScore?: number;
+  maxLeadingScore?: number;
+  minViewings?: number;
+  maxViewings?: number;
+  minSpending?: number;
+  maxSpending?: number;
+  minContracts?: number;
+  maxContracts?: number;
+  minPropertiesBought?: number;
+  maxPropertiesBought?: number;
+  minPropertiesRented?: number;
+  maxPropertiesRented?: number;
+  minPropertiesInvested?: number;
+  maxPropertiesInvested?: number;
+  minRanking?: number;
+  maxRanking?: number;
+  joinedDateFrom?: string;
+  joinedDateTo?: string;
+  cityIds?: string[];
+  districtIds?: string[];
+  wardIds?: string[];
+}
+
+export interface PropertyOwnerFilters {
+  page?: number;
+  limit?: number;
+  sortType?: 'asc' | 'desc';
+  sortBy?: string;
+  name?: string;
+  month?: number;
+  year?: number;
+  ownerTiers?: string[];
+  minContributionPoint?: number;
+  maxContributionPoint?: number;
+  minProperties?: number;
+  maxProperties?: number;
+  minPropertiesForSale?: number;
+  maxPropertiesForSale?: number;
+  minPropertiesForRents?: number;
+  maxPropertiesForRents?: number;
+  minProjects?: number;
+  maxProjects?: number;
+  minRanking?: number;
+  maxRanking?: number;
+  joinedDateFrom?: string;
+  joinedDateTo?: string;
+  cityIds?: string[];
+  districtIds?: string[];
+  wardIds?: string[];
 }
 
 export const accountService = {
@@ -99,7 +267,7 @@ export const accountService = {
   async updateAvatar(file: File): Promise<UserProfile> {
     const formData = new FormData();
     formData.append('avatar', file);
-    
+
     const response = await apiClient.put<SingleResponse<UserProfile>>(
       ACCOUNT_ENDPOINTS.UPDATE_AVATAR,
       formData,
@@ -142,5 +310,132 @@ export const accountService = {
       ACCOUNT_ENDPOINTS.GET_USER(id)
     );
     return response.data.data;
+  },
+
+  /**
+    Update current user account 
+ */
+  async updateMe(data: UpdateAccountRequest): Promise<UserProfile> {
+
+    const formData = new FormData();
+
+    if (data.firstName !== undefined) formData.append('firstName', data.firstName);
+    if (data.lastName !== undefined) formData.append('lastName', data.lastName);
+    if (data.email !== undefined) formData.append('email', data.email);
+    if (data.phoneNumber !== undefined) formData.append('phoneNumber', data.phoneNumber);
+    if (data.zaloContract !== undefined) formData.append('zaloContract', data.zaloContract);
+    if (data.wardId !== undefined) formData.append('wardId', data.wardId);
+    if (data.identificationNumber !== undefined) formData.append('identificationNumber', data.identificationNumber);
+    if (data.dayOfBirth !== undefined) formData.append('dayOfBirth', data.dayOfBirth);
+    if (data.gender !== undefined) formData.append('gender', data.gender);
+    if (data.nation !== undefined) formData.append('nation', data.nation);
+    if (data.issuedDate !== undefined) formData.append('issuedDate', data.issuedDate);
+    if (data.issuingAuthority !== undefined) formData.append('issuingAuthority', data.issuingAuthority);
+
+    if (data.avatar) formData.append('avatar', data.avatar);
+    if (data.frontIdPicture) formData.append('frontIdPicture', data.frontIdPicture);
+    if (data.backIdPicture) formData.append('backIdPicture', data.backIdPicture);
+
+    const response = await apiClient.patch<SingleResponse<UserProfile>>(
+      ACCOUNT_ENDPOINTS.ME,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+    return response.data.data;
+  },
+
+  /**
+  Delete current user account
+ */
+  async deleteMyAccount(): Promise<void> {
+    await apiClient.delete<SingleResponse<void>>(ACCOUNT_ENDPOINTS.ME);
+  },
+
+  /**
+ * Update user by ID (Admin only)
+ */
+  async updateUserById(id: string, data: UpdateAccountRequest): Promise<UserProfile> {
+    const formData = new FormData();
+
+    if (data.firstName !== undefined) formData.append('firstName', data.firstName);
+    if (data.lastName !== undefined) formData.append('lastName', data.lastName);
+    if (data.email !== undefined) formData.append('email', data.email);
+    if (data.phoneNumber !== undefined) formData.append('phoneNumber', data.phoneNumber);
+    if (data.zaloContract !== undefined) formData.append('zaloContract', data.zaloContract);
+    if (data.wardId !== undefined) formData.append('wardId', data.wardId);
+    if (data.identificationNumber !== undefined) formData.append('identificationNumber', data.identificationNumber);
+    if (data.dayOfBirth !== undefined) formData.append('dayOfBirth', data.dayOfBirth);
+    if (data.gender !== undefined) formData.append('gender', data.gender);
+    if (data.nation !== undefined) formData.append('nation', data.nation);
+    if (data.issuedDate !== undefined) formData.append('issuedDate', data.issuedDate);
+    if (data.issuingAuthority !== undefined) formData.append('issuingAuthority', data.issuingAuthority);
+
+    if (data.avatar) formData.append('avatar', data.avatar);
+    if (data.frontIdPicture) formData.append('frontIdPicture', data.frontIdPicture);
+    if (data.backIdPicture) formData.append('backIdPicture', data.backIdPicture);
+
+    const response = await apiClient.patch<SingleResponse<UserProfile>>(
+      ACCOUNT_ENDPOINTS.UPDATE_USER(id),
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+    return response.data.data;
+  },
+
+  /**
+ * Delete user account by ID (Admin only)
+ */
+  async deleteAccountById(id: string): Promise<void> {
+    await apiClient.delete<SingleResponse<void>>(ACCOUNT_ENDPOINTS.DELETE_USER(id));
+  },
+
+  /**
+ * Approve property owner account (Admin only)
+ */
+  async approveAccount(propOwnerId: string, approve: boolean): Promise<void> {
+    await apiClient.put<SingleResponse<void>>(
+      ACCOUNT_ENDPOINTS.APPROVE_ACCOUNT(propOwnerId, approve)
+    );
+  },
+
+  /**
+ * Get all sale agents with filters (Admin only)
+ */
+  async getAllSaleAgents(filters?: SaleAgentFilters): Promise<PaginatedResponse<SaleAgentListItem>> {
+    const response = await apiClient.get<PaginatedResponse<SaleAgentListItem>>(
+      ACCOUNT_ENDPOINTS.SALE_AGENTS,
+      { params: filters }
+    );
+    return response.data;
+  },
+
+  /**
+ * Get all customers with filters (Admin only)
+ */
+  async getAllCustomers(filters?: CustomerFilters): Promise<PaginatedResponse<CustomerListItem>> {
+    const response = await apiClient.get<PaginatedResponse<CustomerListItem>>(
+      ACCOUNT_ENDPOINTS.CUSTOMERS,
+      { params: filters }
+    );
+    return response.data;
+  },
+
+  /**
+ * Get all property owners with filters (Admin only)
+ */
+  async getAllPropertyOwners(filters?: PropertyOwnerFilters): Promise<PaginatedResponse<PropertyOwnerListItem>> {
+    const response = await apiClient.get<PaginatedResponse<PropertyOwnerListItem>>(
+      ACCOUNT_ENDPOINTS.PROPERTY_OWNERS,
+      { params: filters }
+    );
+    return response.data;
   },
 };

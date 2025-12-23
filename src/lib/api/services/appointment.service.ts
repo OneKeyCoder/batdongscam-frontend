@@ -1,5 +1,5 @@
 import apiClient from '../client';
-import { SingleResponse, ListResponse } from '../types';
+import { SingleResponse, ListResponse, PaginatedResponse } from '../types';
 
 const APPOINTMENT_ENDPOINTS = {
   CREATE: '/appointment',
@@ -8,6 +8,8 @@ const APPOINTMENT_ENDPOINTS = {
   CANCEL: (id: string) => `/appointment/${id}/cancel`,
   COMPLETE: (id: string) => `/appointment/${id}/complete`,
   RATE: (id: string) => `/appointment/${id}/rate`,
+  ADMIN_VIEWING_LIST: '/appointment/admin/viewing-list',
+  ADMIN_VIEWING_DETAILS: (id: string) => `/appointment/admin-agent/viewing-details/${id}`,
 };
 
 export interface CreateAppointmentRequest {
@@ -15,8 +17,25 @@ export interface CreateAppointmentRequest {
   preferredDate: string;
   preferredTime: string;
   message?: string;
+  customerId?: string; 
+  agentId?: string;
 }
 
+export interface RateAppointmentRequest {
+  rating: number;
+  comment?: string;
+}
+
+export interface CancelAppointmentRequest {
+  reason?: string;
+}
+
+export interface RateAppointmentRequest {
+  rating: number; // 1-5
+  comment?: string;
+}
+
+// RESPONSE
 export interface ViewingCard {
   id: string;
   title: string;
@@ -29,7 +48,7 @@ export interface ViewingCard {
   requestedDate: string;
 }
 
-export interface ViewingDetails extends ViewingCard {
+export interface ViewingDetailsCustomer extends ViewingCard {
   fullAddress?: string;
   images?: number;
   imagesList?: string[];
@@ -68,17 +87,126 @@ export interface ViewingDetails extends ViewingCard {
   notes?: string;
 }
 
-export interface RateAppointmentRequest {
-  rating: number;
+export interface BookAppointmentResponse {
+  appointmentId: string;
+  propertyId: string;
+  propertyTitle: string;
+  propertyAddress: string;
+  requestedDate: string;
+  status: string;
+  customerRequirements?: string;
+  agentId?: string;
+  agentName?: string;
+  createdAt: string;
+  message?: string;
+}
+
+export interface ViewingDetailsAdmin {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  requestedDate: string;
+  confirmedDate?: string;
+  rating?: number;
   comment?: string;
+  customerRequirements?: string;
+  agentNotes?: string;
+  status: 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
+  viewingOutcome?: string;
+  customerInterestLevel?: string;
+  propertyCard?: {
+    id: string;
+    title: string;
+    thumbnailUrl?: string;
+    transactionType?: 'SALE' | 'RENT';
+    type?: string;
+    fullAddress?: string;
+    price?: number;
+    area?: number;
+  };
+  customer?: {
+    id: string;
+    fullName?: string;
+    tier?: string;
+    phoneNumber?: string;
+    email?: string;
+  };
+  propertyOwner?: {
+    id: string;
+    fullName?: string;
+    tier?: string;
+    phoneNumber?: string;
+    email?: string;
+  };
+  salesAgent?: {
+    id: string;
+    fullName?: string;
+    tier?: string;
+    phoneNumber?: string;
+    email?: string;
+    rating?: number;
+    totalRates?: number;
+  };
+}
+
+export interface ViewingListItem {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  propertyName: string;
+  price?: number;
+  area?: number;
+  thumbnailUrl?: string;
+  requestedDate: string;
+  status: 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
+  cityName?: string;
+  districtName?: string;
+  wardName?: string;
+  customerName?: string;
+  customerTier?: string;
+  salesAgentName?: string;
+  salesAgentTier?: string;
+}
+
+export interface ViewingCardsFilters {
+  page?: number;
+  limit?: number;
+  sortType?: 'asc' | 'desc';
+  sortBy?: string;
+  statusEnum?: 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
+  day?: number;
+  month?: number;
+  year?: number;
+}
+
+export interface ViewingListFilters {
+  page?: number;
+  limit?: number;
+  sortType?: 'asc' | 'desc';
+  sortBy?: string;
+  propertyName?: string;
+  propertyTypeIds?: string[];
+  transactionTypeEnums?: ('SALE' | 'RENT')[];
+  agentName?: string;
+  agentTiers?: string[];
+  customerName?: string;
+  customerTiers?: string[];
+  requestDateFrom?: string; // ISO format
+  requestDateTo?: string;
+  minRating?: number;
+  maxRating?: number;
+  cityIds?: string[];
+  districtIds?: string[];
+  wardIds?: string[];
+  statusEnums?: ('PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED')[];
 }
 
 export const appointmentService = {
   /**
    * Create a new viewing appointment
    */
-  async createAppointment(data: CreateAppointmentRequest): Promise<ViewingCard> {
-    const response = await apiClient.post<SingleResponse<ViewingCard>>(
+  async createAppointment(data: CreateAppointmentRequest): Promise<BookAppointmentResponse> {
+    const response = await apiClient.post<SingleResponse<BookAppointmentResponse>>(
       APPOINTMENT_ENDPOINTS.CREATE,
       data
     );
@@ -86,20 +214,21 @@ export const appointmentService = {
   },
 
   /**
-   * Get all viewing cards for current user
+   * Get viewing cards with filters (paginated)
    */
-  async getViewingCards(): Promise<ViewingCard[]> {
-    const response = await apiClient.get<ListResponse<ViewingCard>>(
-      APPOINTMENT_ENDPOINTS.VIEWING_CARDS
+  async getViewingCards(filters?: ViewingCardsFilters): Promise<PaginatedResponse<ViewingCard>> {
+    const response = await apiClient.get<PaginatedResponse<ViewingCard>>(
+      APPOINTMENT_ENDPOINTS.VIEWING_CARDS,
+      { params: filters }
     );
-    return response.data.data;
+    return response.data;
   },
 
   /**
-   * Get viewing details by ID
+   * Get viewing details by ID (Customer view)
    */
-  async getViewingDetails(id: string): Promise<ViewingDetails> {
-    const response = await apiClient.get<SingleResponse<ViewingDetails>>(
+  async getViewingDetails(id: string): Promise<ViewingDetailsCustomer> {
+    const response = await apiClient.get<SingleResponse<ViewingDetailsCustomer>>(
       APPOINTMENT_ENDPOINTS.VIEWING_DETAILS(id)
     );
     return response.data.data;
@@ -107,32 +236,54 @@ export const appointmentService = {
 
   /**
    * Cancel a viewing appointment
-   * Backend: PATCH /appointment/{id}/cancel
    */
-  async cancelAppointment(id: string, reason?: string): Promise<void> {
-    await apiClient.patch<SingleResponse<void>>(
+  async cancelAppointment(id: string, reason?: string): Promise<boolean> {
+    const response = await apiClient.patch<SingleResponse<boolean>>(
       APPOINTMENT_ENDPOINTS.CANCEL(id),
-      { reason }
+      reason ? { reason } : undefined
     );
+    return response.data.data;
   },
 
   /**
-   * Mark appointment as complete
+   * Mark appointment as completed
    */
-  async completeAppointment(id: string): Promise<void> {
-    await apiClient.patch<SingleResponse<void>>(
+  async completeAppointment(id: string): Promise<boolean> {
+    const response = await apiClient.patch<SingleResponse<boolean>>(
       APPOINTMENT_ENDPOINTS.COMPLETE(id)
     );
+    return response.data.data;
   },
 
   /**
    * Rate a completed appointment
-   * Backend: PUT /appointments/{id}/rate with body { rating, comment }
    */
-  async rateAppointment(id: string, data: RateAppointmentRequest): Promise<void> {
-    await apiClient.put<SingleResponse<void>>(
+  async rateAppointment(id: string, data: RateAppointmentRequest): Promise<boolean> {
+    const response = await apiClient.patch<SingleResponse<boolean>>(
       APPOINTMENT_ENDPOINTS.RATE(id),
       data
     );
+    return response.data.data;
+  },
+
+  /**
+   * Get viewing list with filters (Admin only)
+   */
+  async getViewingList(filters?: ViewingListFilters): Promise<PaginatedResponse<ViewingListItem>> {
+    const response = await apiClient.get<PaginatedResponse<ViewingListItem>>(
+      APPOINTMENT_ENDPOINTS.ADMIN_VIEWING_LIST,
+      { params: filters }
+    );
+    return response.data;
+  },
+
+  /**
+   * Get viewing details (Admin/Agent view)
+   */
+  async getViewingDetailsAdmin(id: string): Promise<ViewingDetailsAdmin> {
+    const response = await apiClient.get<SingleResponse<ViewingDetailsAdmin>>(
+      APPOINTMENT_ENDPOINTS.ADMIN_VIEWING_DETAILS(id)
+    );
+    return response.data.data;
   },
 };

@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link'; 
 import { ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import Badge from '@/app/components/ui/Badge';
+import Pagination from '@/app/components/Pagination';
 
 const agents = Array(10).fill(null).map((_, i) => ({
     id: i + 1, 
@@ -17,6 +18,17 @@ const agents = Array(10).fill(null).map((_, i) => ({
 }));
 
 export default function AgentsTable() {
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentAgents = agents.slice(indexOfFirstItem, indexOfLastItem);
+
+  const handlePageChange = (pageNumber: number) => {
+    setCurrentPage(pageNumber);
+  };
+
   return (
     <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
       <div className="overflow-x-auto">
@@ -70,22 +82,12 @@ export default function AgentsTable() {
         </table>
       </div>
       {/* Pagination */}
-      <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50">
-          <p className="text-sm text-gray-700">
-            Showing <span className="font-medium">1-10</span> of <span className="font-medium">97</span>
-          </p>
-          <div className="flex items-center gap-2">
-                <button className="p-2 border border-gray-300 rounded-lg hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                    <ChevronLeft className="w-5 h-5 text-gray-600" />
-                </button>
-                 <button className="p-2 border border-gray-300 rounded-lg hover:bg-white text-gray-700 font-medium">
-                    1/10
-                </button>
-                 <button className="p-2 border border-gray-300 rounded-lg hover:bg-white">
-                    <ChevronRight className="w-5 h-5 text-gray-600" />
-                </button>
-          </div>
-      </div>
+      <Pagination
+        currentPage={currentPage}
+        totalItems={agents.length}
+        pageSize={itemsPerPage}
+        onPageChange={handlePageChange}
+      />
     </div>
   );
 }

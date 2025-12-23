@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Calendar, CheckCircle, Clock, Eye } from 'lucide-react'; // Import Eye icon
 import Badge from '@/app/components/ui/Badge';
 import PaymentDetailModal from './PaymentDetailModal';
+import Pagination from '@/app/components/Pagination';
 
 const TimelineItem = ({ label, date, icon: Icon, colorClass }: any) => (
     <div className="flex items-start gap-3">
@@ -47,6 +48,17 @@ const history = [
 
 export default function TimelineTab() {
     const [selectedPayment, setSelectedPayment] = useState<any>(null);
+
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
+
+    const indexOfLastItem = currentPage * itemsPerPage;
+    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+    const currentAgents = history.slice(indexOfFirstItem, indexOfLastItem);
+
+    const handlePageChange = (pageNumber: number) => {
+        setCurrentPage(pageNumber);
+    };
 
     return (
         <div className="space-y-6">
@@ -105,14 +117,12 @@ export default function TimelineTab() {
                 </div>
 
                 {/* Pagination */}
-                <div className="px-6 py-4 border-t border-gray-100 bg-white text-sm text-gray-500 flex justify-between items-center">
-                    <span>1-10 of 97</span>
-                    <div className="flex gap-2">
-                        <button className="w-8 h-8 flex items-center justify-center border rounded-lg bg-gray-50 text-gray-400 hover:bg-gray-100">&lt;</button>
-                        <button className="w-8 h-8 flex items-center justify-center border rounded-lg bg-white text-gray-600 font-medium">1/10</button>
-                        <button className="w-8 h-8 flex items-center justify-center border rounded-lg bg-white text-gray-600 hover:bg-gray-50">&gt;</button>
-                    </div>
-                </div>
+                <Pagination
+                    currentPage={currentPage}
+                    totalItems={history.length}
+                    pageSize={itemsPerPage}
+                    onPageChange={handlePageChange}
+                />
             </div>
 
             {/* --- MODAL POPUP --- */}
