@@ -1,10 +1,10 @@
 import React from 'react';
 
 type BadgeVariant =
-  | 'default' | 'success' | 'danger' | 'warning' | 'info' | 'pink' | 'gold'
+  | 'default' | 'success' | 'danger' | 'warning' | 'info' | 'pink' | 'yellow' | 'gold'
   | 'deposit' | 'advance' | 'installment' | 'fullpay' | 'salary' | 'bonus'
   | 'monthly' | 'penalty' | 'refund' | 'sale' | 'rental' | 'pending' | 'failed' 
-  | 'scam' | 'spam' | 'reported' | 'resolved';
+  | 'scam' | 'spam' | 'reported' | 'resolved' | 'red' | 'blue';
 
 interface BadgeProps {
   children: React.ReactNode;
@@ -20,7 +20,10 @@ export default function Badge({ children, variant = 'default', className = '' }:
     warning: 'bg-yellow-100 text-yellow-800 border border-yellow-200',
     info: 'bg-blue-100 text-blue-700 border border-blue-200',
     pink: 'bg-pink-100 text-pink-600 border border-pink-200', // Platinum
+    yellow: "bg-yellow-100 text-yellow-600",
     gold: 'bg-yellow-50 text-yellow-600 border border-yellow-200', // Gold
+    red: "bg-red-100 text-red-600",
+    blue: "bg-blue-100 text-blue-600",
 
     // --- PAYMENT VARIANTS ---
     deposit: 'bg-blue-100 text-blue-700 border-blue-200',

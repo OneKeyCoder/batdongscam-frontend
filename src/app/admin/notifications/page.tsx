@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import NotificationDetailModal from '@/app/components/features/notifications/NotificationDetailModal';
+import NotificationDetailModal from '@/app/components/features/admin/notifications/NotificationDetailModal';
 
 const initialNotifications = Array(10).fill(null).map((_, i) => ({
     id: i + 1,

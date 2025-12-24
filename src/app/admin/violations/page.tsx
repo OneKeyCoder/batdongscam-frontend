@@ -4,8 +4,8 @@ import React, { useState } from 'react';
 import { Search, Filter, ChevronDown, AlertTriangle, TrendingUp, CheckCircle, Clock } from 'lucide-react';
 import StatsGrid from '@/app/components/StatsGrid';
 import Modal from '@/app/components/ui/Modal';
-import ViolationTable from '@/app/components/features/violations/ViolationTable';
-import ViolationAdvancedSearch from '@/app/components/features/violations/ViolationAdvancedSearch';
+import ViolationTable from '@/app/components/features/admin/violations/ViolationTable';
+import ViolationAdvancedSearch from '@/app/components/features/admin/violations/ViolationAdvancedSearch';
 
 export default function ViolationsPage() {
   const [isAdvSearchOpen, setIsAdvSearchOpen] = useState(false);

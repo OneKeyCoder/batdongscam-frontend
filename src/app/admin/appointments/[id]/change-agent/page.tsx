@@ -5,8 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Search, Filter, ChevronLeft } from 'lucide-react';
 import Modal from '@/app/components/ui/Modal';
-import SelectAgentTable from '@/app/components/features/appointments/SelectAgentTable';
-import SelectAgentAdvancedSearch from '@/app/components/features/appointments/SelectAgentAdvancedSearch';
+import SelectAgentTable from '@/app/components/features/admin/appointments/SelectAgentTable';
+import SelectAgentAdvancedSearch from '@/app/components/features/admin/appointments/SelectAgentAdvancedSearch';
 
 export default function ChangeAgentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);

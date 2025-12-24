@@ -4,7 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight, Heart, Home, Map } from 'lucide-react';
 import DetailLayout from '@/app/components/DetailLayout';
-import DistrictSidebar from '@/app/components/features/locations/DistrictSidebar';
+import DistrictSidebar from '@/app/components/features/admin/locations/DistrictSidebar';
 
 export default function LocationDetailPage() {
   return (

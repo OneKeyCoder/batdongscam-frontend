@@ -136,59 +136,6 @@ export interface PropertyCard {
   agentTier?: string;
 }
 
-export interface PropertyDetails {
-  id: string;
-  createdAt: string;
-  updatedAt: string;
-  title: string;
-  description: string;
-  fullAddress: string;
-  priceAmount: number;
-  area: number;
-  transactionType: 'SALE' | 'RENT';
-  status: string;
-  rooms?: number;
-  bathrooms?: number;
-  bedrooms?: number;
-  floors?: number;
-  houseOrientation?: string;
-  balconyOrientation?: string;
-  mediaList: Array<{
-    id: string;
-    filePath: string;
-    mediaType: string;
-  }>;
-  owner: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    phoneNumber: string;
-    email: string;
-  };
-  agent?: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    phoneNumber: string;
-  };
-  ward: {
-    id: string;
-    wardName: string;
-    district: {
-      id: string;
-      districtName: string;
-      city: {
-        id: string;
-        cityName: string;
-      };
-    };
-  };
-  propertyType: {
-    id: string;
-    typeName: string;
-  };
-}
-
 export interface PropertyFilters {
   page?: number;
   limit?: number;

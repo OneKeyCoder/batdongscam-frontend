@@ -4,9 +4,9 @@ import React, { useState } from 'react';
 import { Search, Filter, ChevronDown, Wallet, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
 import StatsGrid from '@/app/components/StatsGrid';
 import Modal from '@/app/components/ui/Modal';
-import PaymentTable from '@/app/components/features/payments/PaymentTable';
-import PaymentAdvancedSearch from '@/app/components/features/payments/PaymentAdvancedSearch';
-import PaymentDetailModal from '@/app/components/features/payments/PaymentDetailModal';
+import PaymentTable from '@/app/components/features/admin/payments/PaymentTable';
+import PaymentAdvancedSearch from '@/app/components/features/admin/payments/PaymentAdvancedSearch';
+import PaymentDetailModal from '@/app/components/features/admin/payments/PaymentDetailModal';
 
 export default function PaymentsPage() {
   const [isAdvSearchOpen, setIsAdvSearchOpen] = useState(false);

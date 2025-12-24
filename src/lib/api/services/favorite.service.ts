@@ -20,7 +20,11 @@ export const favoriteService = {
    */
   async toggleLike(id: string, likeType: LikeType): Promise<boolean> {
     const response = await apiClient.post<SingleResponse<boolean>>(
-      `${FAVORITE_ENDPOINTS.LIKE}?id=${id}&likeType=${likeType}`
+      FAVORITE_ENDPOINTS.LIKE,
+      null,
+      {
+        params: { id, likeType },
+      }
     );
     return response.data.data;
   },

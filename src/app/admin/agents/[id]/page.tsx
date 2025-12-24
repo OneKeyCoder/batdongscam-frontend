@@ -4,9 +4,9 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, ChevronDown } from 'lucide-react';
 
-import AgentProfileCard from '@/app/components/features/agents/details/AgentProfileCard';
-import AgentPerformanceTab from '@/app/components/features/agents/details/AgentPerformanceTab';
-import AgentSalaryTab from '@/app/components/features/agents/details/AgentSalaryTab';
+import AgentProfileCard from '@/app/components/features/admin/agents/details/AgentProfileCard';
+import AgentPerformanceTab from '@/app/components/features/admin/agents/details/AgentPerformanceTab';
+import AgentSalaryTab from '@/app/components/features/admin/agents/details/AgentSalaryTab';
 
 export default function AgentDetailPage() {
   const [activeTab, setActiveTab] = useState<'performance' | 'salary'>('performance');

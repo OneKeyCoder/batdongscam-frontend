@@ -2,8 +2,8 @@
 
 import React from 'react';
 import DetailLayout from '@/app/components/DetailLayout';
-import ContactCard from '@/app/components/features/properties/details/ContactCard'; 
-import DocumentList from '@/app/components/features/properties/details/DocumentList';
+import ContactCard from '@/app/components/features/admin/properties/details/ContactCard'; 
+import DocumentList from '@/app/components/features/admin/properties/details/DocumentList';
 import Link from 'next/link';
 import { ChevronLeft, MapPin, Share2 } from 'lucide-react';
 

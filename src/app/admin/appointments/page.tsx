@@ -1,16 +1,19 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Search, Filter, ChevronDown, Calendar, CheckCircle, Clock, Star, Smile } from 'lucide-react';
+import { Search, Filter, Calendar, CheckCircle, Clock, Star, Smile } from 'lucide-react';
 import StatsGrid from '@/app/components/StatsGrid';
 import Modal from '@/app/components/ui/Modal';
-import LocationPicker from '@/app/components/LocationPicker';
-import AppointmentTable from '@/app/components/features/appointments/AppointmentTable';
-import AppointmentAdvancedSearch from '@/app/components/features/appointments/AppointmentAdvancedSearch';
+import LocationPicker from '@/app/components/LocationPicker'; 
+import AppointmentTable from '@/app/components/features/admin/appointments/AppointmentTable';
+import AppointmentAdvancedSearch from '@/app/components/features/admin/appointments/AppointmentAdvancedSearch';
 
 export default function AppointmentsPage() {
   const [isAdvSearchOpen, setIsAdvSearchOpen] = useState(false);
   const [isLocPickerOpen, setIsLocPickerOpen] = useState(false);
+  
+  // 1. Thêm State lưu danh sách địa điểm
+  const [locations, setLocations] = useState<string[]>([]); 
 
   const statsData = [
     { title: "Total appointments", value: "72.5M", trend: "+12.5%", icon: Calendar },
@@ -56,6 +59,7 @@ export default function AppointmentsPage() {
 
       <AppointmentTable />
 
+      {/* MODAL 1: ADVANCED SEARCH */}
       <Modal 
         isOpen={isAdvSearchOpen} 
         onClose={() => {
@@ -64,16 +68,24 @@ export default function AppointmentsPage() {
         title="Advanced Search"
       >
         <AppointmentAdvancedSearch 
+            selectedLocations={locations} 
             onOpenLocationPicker={() => setIsLocPickerOpen(true)}
             onApply={() => setIsAdvSearchOpen(false)}
-            onReset={() => {}}
+            onReset={() => setLocations([])} 
         />
       </Modal>
 
+      {/* MODAL 2: LOCATION PICKER */}
       <LocationPicker 
         isOpen={isLocPickerOpen} 
         onClose={() => setIsLocPickerOpen(false)}
-        onSelect={(val) => setIsLocPickerOpen(false)}
+        
+        initialSelected={locations} 
+        
+        onConfirm={(newLocations) => {
+            setLocations(newLocations); // Cập nhật state cha
+            setIsLocPickerOpen(false);  // Đóng modal
+        }}
       />
     </div>
   );

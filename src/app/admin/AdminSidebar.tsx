@@ -16,8 +16,8 @@ import {
   Bell,
   LogOut,
   Settings,
-  ChevronRight,
-  UserCircle
+  UserCircle,
+  Triangle
 } from 'lucide-react';
 
 // Định nghĩa kiểu dữ liệu cho Menu Item
@@ -104,9 +104,8 @@ export default function AdminSidebarNav() {
       {/* --- HEADER LOGO --- */}
       <div className="h-20 flex items-center px-6 border-b border-gray-100">
         <div className="flex items-center gap-3">
-          {/* Logo tam giác đỏ giả lập */}
           <div className="w-8 h-8 bg-red-600 rounded-tl-lg rounded-br-lg flex items-center justify-center shadow-sm">
-             <Building className="text-white w-5 h-5" />
+             <Triangle className="text-white fill-white w-5 h-5" />
           </div>
           <div className="flex flex-col">
             <h1 className="text-sm font-bold text-red-600 leading-tight tracking-wide">

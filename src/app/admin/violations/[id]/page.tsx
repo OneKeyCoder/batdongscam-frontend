@@ -3,9 +3,9 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { ChevronLeft } from 'lucide-react';
-import ViolationDetailsTab from '@/app/components/features/violations/details/ViolationDetailsTab';
-import ViolationEvidenceTab from '@/app/components/features/violations/details/ViolationEvidenceTab';
-import ViolationResolutionTab from '@/app/components/features/violations/details/ViolationResolutionTab';
+import ViolationDetailsTab from '@/app/components/features/admin/violations/details/ViolationDetailsTab';
+import ViolationEvidenceTab from '@/app/components/features/admin/violations/details/ViolationEvidenceTab';
+import ViolationResolutionTab from '@/app/components/features/admin/violations/details/ViolationResolutionTab';
 
 export default function ViolationDetailPage() {
   const [activeTab, setActiveTab] = useState<'details' | 'evidence' | 'resolution'>('details');
