@@ -1,47 +1,90 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
-import { Search, X, RotateCcw, Check } from 'lucide-react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { Search, X, RotateCcw, Check, ChevronRight, ArrowLeft, Loader2 } from 'lucide-react';
 import Modal from '@/app/components/ui/Modal'; 
+import { locationService, LocationCardResponse } from '@/lib/api/services/location.service';
+import { removeVietnameseTones } from '@/lib/utils/stringUtils';
+
+export interface LocationSelection {
+  id: string;
+  name: string;
+  type: 'CITY' | 'DISTRICT' | 'WARD';
+}
 
 interface LocationPickerProps {
   isOpen: boolean;
   onClose: () => void;
-  initialSelected?: string[]; 
-  onConfirm: (locations: string[]) => void; 
+  initialSelected?: LocationSelection[]; 
+  onConfirm: (locations: LocationSelection[]) => void; 
 }
 
-const POPULAR_CITIES = ['Hà Nội', 'Hồ Chí Minh', 'Đà Nẵng', 'Bình Dương', 'Hải Phòng', 'Cần Thơ', 'Huế', 'Nha Trang', 'Vũng Tàu', 'Đà Lạt'];
-const ALL_CITIES = Array(30).fill('Hà Nội'); // Mock data
+interface BreadcrumbItem {
+  id: string | null;
+  name: string;
+  type: 'CITY' | 'DISTRICT' | 'WARD';
+}
 
 export default function LocationPicker({ isOpen, onClose, onConfirm, initialSelected = [] }: LocationPickerProps) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [internalTags, setInternalTags] = useState<string[]>(initialSelected);
+  
+  // State lưu danh sách object đã chọn
+  const [selectedItems, setSelectedItems] = useState<LocationSelection[]>(initialSelected);
+  
+  const [topCities, setTopCities] = useState<LocationCardResponse[]>([]);
+  const [currentItems, setCurrentItems] = useState<LocationSelection[]>([]);
+  const [loading, setLoading] = useState(false);
+  
+  const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbItem[]>([
+    { id: null, name: 'All Cities', type: 'CITY' }
+  ]);
 
   useEffect(() => {
       if (isOpen) {
-          setInternalTags(initialSelected);
+          setSelectedItems(initialSelected);
+          if (topCities.length === 0) fetchTopCities();
+          fetchRootCities();
+          setBreadcrumbs([{ id: null, name: 'All Cities', type: 'CITY' }]);
+          setSearchTerm('');
       }
   }, [isOpen, initialSelected]);
 
-  // --- LOGIC SCROLL (Giữ nguyên của bạn) ---
+  const fetchTopCities = async () => {
+    try {
+      const res = await locationService.getTopCities(1, 10);
+      setTopCities(res.data);
+    } catch (error) { console.error(error); }
+  };
+
+  const fetchLocations = async (type: 'CITY' | 'DISTRICT' | 'WARD', parentId?: string) => {
+    setLoading(true);
+    try {
+      const mapData = await locationService.getChildLocations(type, parentId);
+      const items: LocationSelection[] = Array.from(mapData.entries()).map(([id, name]) => ({
+        id,
+        name,
+        type
+      }));
+      items.sort((a, b) => a.name.localeCompare(b.name));
+      setCurrentItems(items);
+    } catch (error) { setCurrentItems([]); } 
+    finally { setLoading(false); }
+  };
+
+  const fetchRootCities = () => fetchLocations('CITY');
+
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scrollBarRef = useRef<HTMLDivElement>(null);
   const [scrollPercentage, setScrollPercentage] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
-
   const handleScroll = () => {
     if (scrollContainerRef.current) {
         const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
         const maxScroll = scrollWidth - clientWidth;
-        if (maxScroll > 0) {
-            setScrollPercentage((scrollLeft / maxScroll) * 100);
-        }
+        if (maxScroll > 0) setScrollPercentage((scrollLeft / maxScroll) * 100);
     }
   };
-
-  const handleBarMouseDown = (e: React.MouseEvent) => { setIsDragging(true); };
-
+  const handleBarMouseDown = () => { setIsDragging(true); };
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDragging || !scrollBarRef.current || !scrollContainerRef.current) return;
@@ -65,125 +108,138 @@ export default function LocationPicker({ isOpen, onClose, onConfirm, initialSele
       document.removeEventListener('mouseup', handleMouseUp);
     };
   }, [isDragging]);
-  // ----------------------------------------
 
-  // Thêm địa điểm vào danh sách tạm
-  const handleAddLocation = (location: string) => {
-      if (!internalTags.includes(location)) {
-          setInternalTags([...internalTags, location]);
+  const handleToggleItem = (item: LocationSelection) => {
+      const exists = selectedItems.find(i => i.id === item.id);
+      if (exists) {
+          setSelectedItems(prev => prev.filter(i => i.id !== item.id));
+      } else {
+          setSelectedItems([...selectedItems, item]);
       }
   };
 
-  // Xóa địa điểm khỏi danh sách tạm
-  const removeTag = (tag: string) => {
-      setInternalTags(prev => prev.filter(t => t !== tag));
-  }
+  const handleRemoveItem = (id: string) => {
+      setSelectedItems(prev => prev.filter(i => i.id !== id));
+  };
 
-  // Bấm Done -> Gửi dữ liệu về cha
-  const handleConfirm = () => {
-      onConfirm(internalTags); 
-      onClose(); 
-  }
+  const handleDrillDown = (item: LocationSelection) => {
+    let nextType: 'DISTRICT' | 'WARD' | null = null;
+    if (item.type === 'CITY') nextType = 'DISTRICT';
+    else if (item.type === 'DISTRICT') nextType = 'WARD';
+
+    if (nextType) {
+      setBreadcrumbs(prev => [...prev, { id: item.id, name: item.name, type: nextType! }]);
+      fetchLocations(nextType, item.id);
+      setSearchTerm(''); 
+    }
+  };
+
+  const handleBreadcrumbClick = (index: number) => {
+    const targetCrumb = breadcrumbs[index];
+    setBreadcrumbs(prev => prev.slice(0, index + 1));
+    setSearchTerm('');
+    if (targetCrumb.id === null) fetchRootCities();
+    else fetchLocations(targetCrumb.type, targetCrumb.id || undefined);
+  };
+  const handleBack = () => { if (breadcrumbs.length > 1) handleBreadcrumbClick(breadcrumbs.length - 2); };
+
+  const filteredItems = useMemo(() => {
+      if (!searchTerm) return currentItems;
+      const normalizedSearch = removeVietnameseTones(searchTerm);
+      return currentItems.filter(item => removeVietnameseTones(item.name).includes(normalizedSearch));
+  }, [searchTerm, currentItems]);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Where are you interested in?">
-      <div className="space-y-4">
-        {/* Search Input */}
-        <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-            <input 
-                type="text" 
-                placeholder="Enter Location" 
-                className="w-full pl-10 pr-4 py-2.5 bg-gray-100 border-none rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-red-500 transition-colors"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onKeyDown={(e) => {
-                    if (e.key === 'Enter' && searchTerm.trim()) {
-                        handleAddLocation(searchTerm);
-                        setSearchTerm('');
-                    }
-                }}
-            />
-        </div>
-
-        {/* Selected Tags List (Render từ state nội bộ) */}
-        <div className="flex flex-wrap gap-2 min-h-[30px]">
-            {internalTags.length === 0 && <span className="text-xs text-gray-400 italic">No location selected</span>}
-            {internalTags.map((tag, idx) => (
-                <span key={idx} className="inline-flex items-center gap-1 px-2 py-1 bg-white border border-gray-200 rounded text-[11px] font-medium text-gray-700 shadow-sm whitespace-nowrap">
-                    {tag}
-                    <X className="w-3 h-3 cursor-pointer text-red-500 hover:text-red-700" onClick={() => removeTag(tag)}/>
+      <div className="space-y-4 flex flex-col h-[500px]"> 
+        
+        {/* Selected Tags */}
+        <div className="flex flex-wrap gap-2 min-h-[32px]">
+            {selectedItems.length === 0 && <span className="text-xs text-gray-400 italic py-1">No location selected</span>}
+            {selectedItems.map((item) => (
+                <span key={item.id} className="inline-flex items-center gap-1 px-2 py-1 bg-red-50 border border-red-100 rounded text-[11px] font-bold text-red-700 shadow-sm whitespace-nowrap">
+                    {item.name}
+                    <X className="w-3 h-3 cursor-pointer hover:text-red-900" onClick={() => handleRemoveItem(item.id)}/>
                 </span>
             ))}
         </div>
 
-        <hr className="border-gray-100"/>
-
-        {/* Top Cities */}
-        <div>
-            <h4 className="text-sm font-medium text-gray-600 mb-3">Top 10 popular cities</h4>
-            <div 
-                ref={scrollContainerRef}
-                onScroll={handleScroll}
-                className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide cursor-grab active:cursor-grabbing"
-                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-            >
-                {POPULAR_CITIES.map((city, idx) => (
-                    <div 
-                        key={idx}
-                        className="min-w-[100px] h-[100px] bg-gray-200 hover:bg-red-50 hover:text-red-600 rounded-lg flex items-end justify-center p-2 cursor-pointer transition-colors shrink-0"
-                        // Sửa logic onClick: Thêm vào tags
-                        onClick={() => handleAddLocation(city)}
-                    >
-                        <span className="font-medium text-xs pointer-events-none select-none">{city}</span>
-                    </div>
-                ))}
+        {breadcrumbs.length === 1 && !searchTerm && (
+            <div>
+                <h4 className="text-sm font-bold text-gray-800 mb-3">Popular Cities</h4>
+                <div ref={scrollContainerRef} onScroll={handleScroll} className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide cursor-grab active:cursor-grabbing" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                    {topCities.map((city) => (
+                        <div 
+                            key={city.id}
+                            className="min-w-[100px] h-[100px] relative rounded-lg overflow-hidden cursor-pointer shrink-0 group"
+                            onClick={() => handleToggleItem({ id: city.id, name: city.name, type: 'CITY' })} // Fix: truyền object
+                            onDoubleClick={() => handleDrillDown({ id: city.id, name: city.name, type: 'CITY' })}
+                        >
+                            <div className="absolute inset-0 bg-gray-300 group-hover:scale-110 transition-transform duration-500">
+                                {city.imgUrl && <img src={city.imgUrl} alt={city.name} className="w-full h-full object-cover" />}
+                            </div>
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent flex items-end justify-center p-2">
+                                <span className="font-bold text-xs text-white text-center">{city.name}</span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                {/* ... Scrollbar UI ... */}
+                <div className="h-1 w-full bg-gray-100 mt-1 rounded-full overflow-hidden relative">
+                    <div ref={scrollBarRef} onMouseDown={handleBarMouseDown} className="absolute top-0 h-full bg-red-500 rounded-full transition-all" style={{ width: '20%', left: `${scrollPercentage * 0.8}%` }}></div>
+                </div>
+                <div className="border-t border-gray-100 my-2"></div>
             </div>
-            {/* Scrollbar */}
-            <div className="h-1.5 w-full bg-gray-200 mt-2 rounded-full overflow-hidden relative cursor-pointer group">
-                <div 
-                    ref={scrollBarRef}
-                    onMouseDown={handleBarMouseDown}
-                    className="absolute top-0 h-full bg-red-600 rounded-full cursor-grab active:cursor-grabbing transition-colors group-hover:bg-red-700"
-                    style={{ 
-                        width: '30%', 
-                        left: `${scrollPercentage * 0.7}%`, 
-                        transition: isDragging ? 'none' : 'left 0.1s ease-out'
-                    }}
-                ></div>
+        )}
+
+        {/* Main List */}
+        <div className="flex-1 flex flex-col min-h-0">
+            {/* Header & Search UI (Giữ nguyên) */}
+            <div className="flex items-center gap-2 mb-3">
+                {breadcrumbs.length > 1 && <button onClick={handleBack} className="p-1.5 hover:bg-gray-100 rounded-full text-gray-600"><ArrowLeft className="w-4 h-4" /></button>}
+                <div className="flex-1 flex items-center text-sm overflow-hidden whitespace-nowrap">
+                    {breadcrumbs.map((crumb, idx) => (
+                        <React.Fragment key={idx}>
+                            {idx > 0 && <ChevronRight className="w-3 h-3 text-gray-400 mx-1 shrink-0" />}
+                            <span onClick={() => handleBreadcrumbClick(idx)} className={`cursor-pointer hover:underline ${idx === breadcrumbs.length - 1 ? 'font-bold text-gray-900' : 'text-gray-500'}`}>{crumb.name}</span>
+                        </React.Fragment>
+                    ))}
+                </div>
+                <div className="relative w-48 shrink-0">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 w-3.5 h-3.5" />
+                    <input type="text" placeholder="Search..." className="w-full pl-8 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-md text-xs focus:outline-none focus:border-red-500" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar relative bg-gray-50/50 rounded-lg border border-gray-100 p-2">
+                {loading ? <div className="absolute inset-0 flex items-center justify-center"><Loader2 className="w-6 h-6 text-red-600 animate-spin" /></div> : (
+                    <>
+                        {filteredItems.length === 0 ? <div className="h-full flex items-center justify-center text-gray-400 text-xs">No locations found.</div> : (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                {filteredItems.map((item) => {
+                                    const isSelected = selectedItems.some(i => i.id === item.id); 
+                                    return (
+                                        <div 
+                                            key={item.id}
+                                            className={`group flex items-center justify-between px-3 py-2.5 rounded-md border cursor-pointer transition-all select-none ${isSelected ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200 hover:border-red-300 hover:shadow-sm'}`}
+                                            onClick={() => handleToggleItem(item)} // Select
+                                            onDoubleClick={() => handleDrillDown(item)} // Drill down
+                                        >
+                                            <span className={`text-xs font-medium truncate ${isSelected ? 'text-red-700' : 'text-gray-700 group-hover:text-red-600'}`}>{item.name}</span>
+                                            {item.type !== 'WARD' && <ChevronRight className="w-3 h-3 text-gray-300 group-hover:text-red-400 shrink-0" />}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </>
+                )}
             </div>
         </div>
 
-        {/* All Cities */}
-        <div>
-             <h4 className="text-sm font-medium text-gray-600 mb-3">All cities</h4>
-             <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-y-2 gap-x-2 max-h-60 overflow-y-auto custom-scrollbar">
-                {ALL_CITIES.map((city, idx) => (
-                    <button 
-                        key={idx} 
-                        className="text-left text-xs text-gray-500 hover:text-red-600 hover:font-bold transition-all py-1"
-                        onClick={() => handleAddLocation(city)}
-                    >
-                        {city}
-                    </button>
-                ))}
-             </div>
-        </div>
-
-        {/* Footer Actions */}
-        <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100 mt-2">
-             <button 
-                className="flex items-center gap-1 px-3 py-2 border border-gray-300 rounded-lg text-gray-600 text-sm font-medium hover:bg-gray-50 transition-colors"
-                onClick={() => setInternalTags([])} // Reset nội bộ
-             >
-                <RotateCcw className="w-4 h-4" /> Reset All
-             </button>
-             <button 
-                onClick={handleConfirm} // Gọi hàm confirm để đóng và gửi data
-                className="flex items-center gap-1 px-4 py-2 bg-red-600 text-white text-sm font-bold rounded-lg hover:bg-red-700 transition-colors"
-             >
-                <Check className="w-4 h-4" /> Done
-             </button>
+        <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+             <button className="text-xs text-gray-500 hover:text-gray-900 flex items-center gap-1 font-medium" onClick={() => setSelectedItems([])}><RotateCcw className="w-3 h-3" /> Reset Selection</button>
+             <button onClick={() => { onConfirm(selectedItems); onClose(); }} className="flex items-center gap-2 px-6 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-lg shadow-md transition-all active:scale-95"><Check className="w-4 h-4" /> Confirm ({selectedItems.length})</button>
         </div>
       </div>
     </Modal>

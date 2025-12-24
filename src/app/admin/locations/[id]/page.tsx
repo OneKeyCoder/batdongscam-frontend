@@ -1,124 +1,168 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState, use } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, ChevronRight, Heart, Home, Map } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Heart, Home, Map, Loader2, Calendar } from 'lucide-react';
 import DetailLayout from '@/app/components/DetailLayout';
 import DistrictSidebar from '@/app/components/features/admin/locations/DistrictSidebar';
+import { locationService, LocationDetailsResponse } from '@/lib/api/services/location.service';
 
-export default function LocationDetailPage() {
+export default function LocationDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
+  const [location, setLocation] = useState<LocationDetailsResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchDetail = async () => {
+      setLoading(true);
+      try {
+        const data = await locationService.getLocationDetails(id, 'CITY');
+        setLocation(data);
+      } catch (error) {
+        console.error("Failed to fetch location details", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    if (id) fetchDetail();
+  }, [id]);
+
+  if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 text-red-600 animate-spin" /></div>;
+  if (!location) return <div className="text-center py-10">Location not found</div>;
+
   return (
     <div className="max-w-7xl mx-auto pb-10">
-      {/* Breadcrumb */}
-      <div className="mb-6">
-         <Link 
-            href="/admin/locations" 
-            className="inline-flex items-center text-gray-500 hover:text-red-600 transition-colors text-sm font-medium mb-2"
-        >
-            <ChevronLeft className="w-4 h-4 mr-1" />
-            Back to Locations
-        </Link>
-        <h2 className="text-2xl font-bold text-gray-900">Locations Management</h2>
+      <div className="mb-4">
+         <h2 className="text-2xl font-bold text-gray-900">Locations Management</h2>
+         <p className="text-sm text-gray-500">Manage all your Locations</p>
       </div>
 
       <DetailLayout
-        // Cột phải là danh sách Districts
-        sidebar={<DistrictSidebar />}
+        sidebar={<DistrictSidebar parentId={location.id} />}
       >
-        {/* Cột trái: Thông tin chi tiết Thành phố */}
         <div className="space-y-6">
             
-            {/* Gallery Image */}
-            <div className="relative h-96 bg-gray-200 rounded-xl overflow-hidden group">
+            {/* 1. Gallery Slider */}
+            <div className="relative h-[400px] bg-gray-100 rounded-xl overflow-hidden group">
                 <img 
-                    src="https://images.unsplash.com/photo-1555921015-5532091f6026?auto=format&fit=crop&q=80&w=1000" 
-                    alt="Ha Noi" 
+                    src={location.imgUrl || 'https://placehold.co/800x400?text=No+Image'} 
+                    alt={location.name} 
                     className="w-full h-full object-cover"
                 />
-                <button className="absolute left-4 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/80 rounded-full flex items-center justify-center hover:bg-white"><ChevronLeft className="w-5 h-5"/></button>
-                <button className="absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/80 rounded-full flex items-center justify-center hover:bg-white"><ChevronRight className="w-5 h-5"/></button>
-                <div className="absolute bottom-4 right-4 bg-black/50 text-white text-xs px-2 py-1 rounded">2/3</div>
+                
+                {/* Navigation Controls */}
+                <button className="absolute left-4 top-1/2 -translate-y-1/2 w-8 h-8 bg-white rounded-lg flex items-center justify-center hover:bg-gray-50 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                    <ChevronLeft className="w-5 h-5 text-gray-700"/>
+                </button>
+                <button className="absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 bg-white rounded-lg flex items-center justify-center hover:bg-gray-50 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                    <ChevronRight className="w-5 h-5 text-gray-700"/>
+                </button>
+                <div className="absolute bottom-4 right-4 bg-black/60 text-white text-xs px-2 py-1 rounded">
+                    1/1
+                </div>
             </div>
 
-            {/* Main Info */}
-            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-                <div className="mb-4">
-                    <p className="text-xs text-gray-500">For rent / Bắc Giang / Việt Yên / Property Name</p>
-                    <h1 className="text-3xl font-bold text-gray-900 mt-1">Hà Nội</h1>
-                </div>
-
-                <hr className="border-gray-100 my-4"/>
-
-                {/* Stats Row */}
-                <div className="grid grid-cols-3 gap-4 mb-6">
-                    <div>
-                        <p className="text-xs text-gray-500 font-medium">Average land price</p>
-                        <p className="text-lg font-bold text-red-600">1,00.00 $/m²</p>
-                    </div>
-                     <div>
-                        <p className="text-xs text-gray-500 font-medium">Total Area</p>
-                        <p className="text-lg font-bold text-red-600">120 m²</p>
-                    </div>
-                     <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-xs text-gray-500 font-medium">Population</p>
-                            <p className="text-lg font-bold text-red-600">123,523</p>
-                        </div>
-                        <button className="p-2 text-gray-400 hover:text-red-500"><Heart className="w-5 h-5"/></button>
-                    </div>
-                </div>
-
-                {/* Description */}
-                <div className="space-y-4">
-                    <h3 className="font-bold text-gray-900">Description</h3>
-                    <p className="text-sm text-gray-600 leading-relaxed">
-                        Thủ đô Hà Nội là trung tâm chính trị, văn hóa và du lịch quan trọng của Việt Nam. 
-                        Với lịch sử hơn ngàn năm văn hiến, Hà Nội nổi tiếng với khu phố cổ, các di tích lịch sử và kiến trúc thuộc địa Pháp.
-                    </p>
-                    <p className="text-sm text-gray-600 leading-relaxed">
-                        Thành phố đang phát triển mạnh mẽ về cơ sở hạ tầng và bất động sản, thu hút nhiều nhà đầu tư trong và ngoài nước.
-                    </p>
-                </div>
-
-                 <hr className="border-gray-100 my-6"/>
-
-                 {/* Sub Stats */}
-                 <div className="grid grid-cols-2 gap-6">
-                    <div>
-                        <div className="flex items-center gap-2 mb-1">
-                            <Home className="w-5 h-5 text-red-600" />
-                            <span className="text-sm text-gray-500">Districts</span>
-                        </div>
-                        <p className="text-xl font-bold text-gray-900 pl-7">20</p>
-                    </div>
-                     <div>
-                        <div className="flex items-center gap-2 mb-1">
-                            <Home className="w-5 h-5 text-red-600" />
-                            <span className="text-sm text-gray-500">Active Properties</span>
-                        </div>
-                        <p className="text-xl font-bold text-gray-900 pl-7">511</p>
-                    </div>
-                     <div>
-                        <div className="flex items-center gap-2 mb-1">
-                            <Map className="w-5 h-5 text-red-600" />
-                            <span className="text-sm text-gray-500">Wards</span>
-                        </div>
-                        <p className="text-xl font-bold text-gray-900 pl-7">131</p>
-                    </div>
-                 </div>
-
-                 {/* Dates */}
-                 <div className="flex justify-between text-xs text-gray-500 mt-8 pt-4 border-t border-gray-100">
-                    <div>
-                        <p>Created day</p>
-                        <p className="font-bold text-gray-900">9:00AM - 08/10/2025</p>
-                    </div>
-                     <div>
-                        <p>Last updated day</p>
-                        <p className="font-bold text-gray-900">9:00AM - 09/10/2025</p>
-                    </div>
-                 </div>
+            {/* Breadcrumb Mock */}
+            <div className="text-xs text-gray-500">
+                Vietnam / {location.name} / Overview
             </div>
+
+            {/* Title */}
+            <h1 className="text-3xl font-bold text-gray-900">{location.name}</h1>
+
+            <hr className="border-gray-200" />
+
+            {/* 2. Key Stats Row (Giống thiết kế) */}
+            <div className="flex items-start justify-between">
+                <div className="flex gap-12">
+                    <div>
+                        <p className="text-sm text-gray-500 font-medium mb-1">Average land price</p>
+                        <p className="text-lg font-bold text-red-600">
+                            {location.avgLandPrice ? location.avgLandPrice.toLocaleString() : 'N/A'} $/m²
+                        </p>
+                    </div>
+                    <div>
+                        <p className="text-sm text-gray-500 font-medium mb-1">Total Area</p>
+                        <p className="text-lg font-bold text-red-600">
+                            {location.totalArea ? location.totalArea.toLocaleString() : 'N/A'} m²
+                        </p>
+                    </div>
+                    <div>
+                        <p className="text-sm text-gray-500 font-medium mb-1">Population</p>
+                        <p className="text-lg font-bold text-red-600">
+                            {location.population ? location.population.toLocaleString() : 'N/A'}
+                        </p>
+                    </div>
+                </div>
+                <button className="text-gray-400 hover:text-red-500">
+                    <Heart className={`w-6 h-6 ${location.isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
+                </button>
+            </div>
+
+            {/* 3. Description */}
+            <div>
+                <h3 className="font-bold text-gray-900 mb-2">Description</h3>
+                <div className="text-sm text-gray-600 leading-relaxed space-y-4 text-justify">
+                    {location.description ? (
+                        location.description.split('\n').map((para, i) => (
+                            <p key={i}>{para}</p>
+                        ))
+                    ) : (
+                        <p className="italic text-gray-400">No description available.</p>
+                    )}
+                </div>
+            </div>
+
+            <hr className="border-gray-200" />
+
+            {/* 4. Sub Stats (Icons) */}
+            <div className="space-y-4">
+                {/* Districts Count */}
+                <div>
+                    <div className="flex items-center gap-2 mb-1">
+                        <Home className="w-4 h-4 text-red-600" />
+                        <span className="text-sm text-gray-600 font-medium">Districts</span>
+                    </div>
+                    <p className="text-lg font-bold text-gray-900 pl-6">{location.districtCount || 0}</p>
+                </div>
+
+                {/* Active Properties */}
+                <div>
+                    <div className="flex items-center gap-2 mb-1">
+                        <Home className="w-4 h-4 text-red-600" />
+                        <span className="text-sm text-gray-600 font-medium">Active Properties</span>
+                    </div>
+                    <p className="text-lg font-bold text-gray-900 pl-6">{location.activeProperties || 511}</p>
+                </div>
+
+                {/* Wards Count */}
+                <div>
+                    <div className="flex items-center gap-2 mb-1">
+                        <Home className="w-4 h-4 text-red-600" />
+                        <span className="text-sm text-gray-600 font-medium">Wards</span>
+                    </div>
+                    <p className="text-lg font-bold text-gray-900 pl-6">{location.wardCount || 0}</p>
+                </div>
+            </div>
+
+            <hr className="border-gray-200" />
+
+            {/* 5. Footer Dates */}
+            <div className="flex gap-12 text-xs text-gray-500">
+                <div>
+                    <p className="mb-1">Created day</p>
+                    <p className="font-bold text-gray-900">
+                        {new Date(location.createdAt).toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' })}
+                    </p>
+                </div>
+                <div>
+                    <p className="mb-1">Last updated day</p>
+                    <p className="font-bold text-gray-900">
+                        {new Date(location.updatedAt).toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' })}
+                    </p>
+                </div>
+            </div>
+
         </div>
       </DetailLayout>
     </div>
