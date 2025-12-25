@@ -1,39 +1,95 @@
-import React from 'react';
-import { Heart } from 'lucide-react';
+'use client';
 
-const districts = [
-    { name: 'Quận 1', price: '1,00.00 $/m²', total: '12.130,41 m²', code: '123.534.125', img: 'https://images.unsplash.com/photo-1545641203-7d072a14e3b2?w=300' },
-    { name: 'Quận Bình Thạnh', price: '1,00.00 $/m²', total: '12.130,41 m²', code: '123.534.125', img: 'https://images.unsplash.com/photo-1565514020176-8f3521360699?w=300' },
-    { name: 'Thành phố Thủ Đức', price: '1,00.00 $/m²', total: '12.130,41 m²', code: '123.534.125', img: 'https://images.unsplash.com/photo-1596280624009-85834872172a?w=300' },
-];
+import React, { useEffect, useState } from 'react';
+import { User, Heart, Loader2, AlertCircle } from 'lucide-react';
+import { locationService, LocationCardResponse } from '@/lib/api/services/location.service';
+import Link from 'next/link';
 
-export default function DistrictSidebar() {
+interface DistrictSidebarProps {
+  parentId?: string; 
+}
+
+export default function DistrictSidebar({ parentId }: DistrictSidebarProps) {
+  const [districts, setDistricts] = useState<LocationCardResponse[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchDistricts = async () => {
+      if (!parentId) return;
+      setLoading(true);
+      try {
+        const res = await locationService.getLocationCards({
+            page: 1,
+            limit: 10, 
+            locationTypeEnum: 'DISTRICT',
+            cityIds: [parentId], 
+            sortBy: 'avgLandPrice',
+            sortType: 'desc'
+        });
+        setDistricts(res.data);
+      } catch (error) {
+        console.error("Failed to fetch district cards", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDistricts();
+  }, [parentId]);
+
   return (
     <div className="space-y-4">
-      <h3 className="font-bold text-gray-900">Districts</h3>
-      {districts.map((d, i) => (
-        <div key={i} className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-            <div className="h-32 w-full relative">
-                <img src={d.img} alt={d.name} className="w-full h-full object-cover" />
-                <button className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full hover:bg-white hover:text-red-500 transition-colors">
-                    <Heart className="w-4 h-4" />
-                </button>
-            </div>
-            <div className="p-3">
-                <h4 className="font-bold text-gray-900 text-sm mb-2">{d.name}</h4>
-                <div className="flex justify-between items-end">
-                    <div>
-                        <p className="text-red-600 font-bold text-xs">{d.price}</p>
-                        <p className="text-gray-500 text-[10px] flex items-center gap-1 mt-0.5">
-                            <span className="w-3 h-3 rounded-full bg-gray-200 flex items-center justify-center text-[8px]">👤</span>
-                            {d.code}
-                        </p>
-                    </div>
-                    <span className="text-red-600 font-bold text-xs">{d.total}</span>
-                </div>
-            </div>
+      <h3 className="font-bold text-gray-900 text-lg">Districts</h3>
+      
+      {loading ? (
+        <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 text-red-600 animate-spin" /></div>
+      ) : districts.length === 0 ? (
+        <div className="bg-white p-6 rounded-xl border border-gray-200 text-center text-gray-400 text-sm">
+           <AlertCircle className="w-5 h-5 mx-auto mb-2 opacity-50"/>
+           No districts found
         </div>
-      ))}
+      ) : (
+        <div className="space-y-4">
+          {districts.map((item) => (
+            <div key={item.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-md transition-shadow group">
+               {/* Image */}
+               <div className="h-32 bg-gray-200 relative overflow-hidden">
+                  <img 
+                    src={item.imgUrl || 'https://placehold.co/400x200?text=No+Image'} 
+                    alt={item.name} 
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                  />
+               </div>
+               
+               {/* Content */}
+               <div className="p-3">
+                  <h4 className="font-bold text-gray-900 text-sm mb-2">{item.name}</h4>
+                  
+                  {/* Stats Grid */}
+                  <div className="grid grid-cols-2 gap-y-1 gap-x-2 text-xs mb-3">
+                      <span className="font-bold text-red-600">
+                        {item.avgLandPrice ? item.avgLandPrice.toLocaleString() : '-'} $/m²
+                      </span>
+                      <span className="font-bold text-red-600 text-right">
+                        {item.totalArea ? item.totalArea.toLocaleString() : '-'} m²
+                      </span>
+                      
+                      <div className="flex items-center gap-1 text-gray-500 col-span-2">
+                         <User className="w-3 h-3" />
+                         <span>{item.population ? item.population.toLocaleString() : '-'}</span>
+                      </div>
+                  </div>
+
+                  <div className="flex justify-end">
+                      <button className="text-gray-400 hover:text-red-500">
+                          <Heart className={`w-4 h-4 ${item.isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
+                      </button>
+                  </div>
+               </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
