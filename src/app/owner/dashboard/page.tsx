@@ -40,7 +40,7 @@ export default function OwnerDashboardPage() {
           </p>
         </div>
         <Link
-          href="/owner/properties/new"
+          href="/my/properties/new"
           className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium text-sm"
         >
           <Building className="w-4 h-4" />
@@ -91,7 +91,7 @@ export default function OwnerDashboardPage() {
         <div className="lg:col-span-2 bg-white rounded-xl border border-gray-100 shadow-sm">
           <div className="flex items-center justify-between p-5 border-b border-gray-100">
             <h2 className="font-bold text-gray-900">Properties Overview</h2>
-            <Link href="/owner/properties" className="text-sm text-red-600 hover:text-red-700 font-medium">
+            <Link href="/my/properties" className="text-sm text-red-600 hover:text-red-700 font-medium">
               View All
             </Link>
           </div>
@@ -161,7 +161,7 @@ export default function OwnerDashboardPage() {
       {/* Quick Actions */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Link 
-          href="/owner/properties/new"
+          href="/my/properties/new"
           className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition-all hover:border-red-200 group"
         >
           <Building className="w-8 h-8 text-red-600 mb-3 group-hover:scale-110 transition-transform" />

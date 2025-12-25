@@ -36,9 +36,10 @@ export interface Ward {
 
 export interface PropertyType {
   id: string;
-  name: string;
+  typeName: string;
   description?: string;
-  iconUrl?: string;
+  avatarUrl?: string;
+  isActive?: boolean;
 }
 
 export interface CreateLocationRequest {

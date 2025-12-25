@@ -151,8 +151,8 @@ export default function NavBar() {
                   <Link href="/properties?type=sale" className="text-sm font-bold text-gray-900 hover:text-gray-700">
                     Buy
                   </Link>
-                  <Link href="/projects" className="text-sm font-bold text-gray-900 hover:text-gray-700">
-                    Projects
+                  <Link href="/locations" className="text-sm font-bold text-gray-900 hover:text-gray-700">
+                    Locations
                   </Link>
                 </div>
               </div>
@@ -185,15 +185,15 @@ export default function NavBar() {
           {/* Mobile Menu */}
           {showMobileMenu && (
             <div className="lg:hidden bg-white border-t border-gray-100 py-4">
-              <div className="max-w-[85%] mx-auto px-4 space-y-3">
+              <div className="max-w-[90%] mx-auto px-4 space-y-3">
                 <Link href="/properties?type=rent" className="block py-2 text-sm font-bold text-gray-900">
                   Rent
                 </Link>
                 <Link href="/properties?type=sale" className="block py-2 text-sm font-bold text-gray-900">
                   Buy
                 </Link>
-                <Link href="/projects" className="block py-2 text-sm font-bold text-gray-900">
-                  Projects
+                <Link href="/locations" className="block py-2 text-sm font-bold text-gray-900">
+                  Locations
                 </Link>
                 <div className="pt-4 space-y-2">
                   <Link href="/login" className="block py-2 text-center text-sm font-bold text-gray-900 border border-gray-300 rounded-lg">
@@ -247,10 +247,10 @@ export default function NavBar() {
                   Buy
                 </Link>
                 <Link
-                  href="/projects"
+                  href="/locations"
                   className="text-sm font-bold text-gray-900 hover:text-gray-700 transition-colors"
                 >
-                  Projects
+                  Locations
                 </Link>
               </div>
             </div>
@@ -353,7 +353,7 @@ export default function NavBar() {
                     {user.role === 'PROPERTY_OWNER' && (
                       <div className="px-4 py-2 border-t border-gray-100">
                         <Link
-                          href="/owner/properties/new"
+                          href="/my/properties/new"
                           onClick={() => setShowDropdown(false)}
                           className="flex items-center gap-2 w-full px-3 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
                         >
@@ -415,11 +415,11 @@ export default function NavBar() {
                 Buy
               </Link>
               <Link
-                href="/projects"
+                href="/locations"
                 onClick={() => setShowMobileMenu(false)}
                 className="block py-2 text-sm font-bold text-gray-900 hover:text-gray-700"
               >
-                Projects
+                Locations
               </Link>
             </div>
           </div>

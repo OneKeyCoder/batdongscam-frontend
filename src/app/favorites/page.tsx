@@ -1,91 +1,62 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Heart, Grid, List, Filter, Trash2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Heart, Grid, List, Loader2 } from 'lucide-react';
+import Link from 'next/link';
 import PropertyCard from '@/app/components/cards/PropertyCard';
-
-// Mock data
-const mockFavorites = [
-  {
-    id: 1,
-    image: 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=400',
-    title: 'Modern Villa with Pool',
-    price: '$850,000',
-    address: 'District 7, Ho Chi Minh City',
-    bedrooms: 4,
-    bathrooms: 3,
-    area: '280 m²',
-    type: 'Sale' as const,
-  },
-  {
-    id: 2,
-    image: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=400',
-    title: 'Luxury Apartment Downtown',
-    price: '$1,200/month',
-    address: 'District 1, Ho Chi Minh City',
-    bedrooms: 2,
-    bathrooms: 2,
-    area: '120 m²',
-    type: 'Rent' as const,
-  },
-  {
-    id: 3,
-    image: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=400',
-    title: 'Family House with Garden',
-    price: '$650,000',
-    address: 'Thu Duc City, Ho Chi Minh',
-    bedrooms: 5,
-    bathrooms: 4,
-    area: '350 m²',
-    type: 'Sale' as const,
-  },
-  {
-    id: 4,
-    image: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=400',
-    title: 'Cozy Studio Near Park',
-    price: '$450/month',
-    address: 'Binh Thanh District',
-    bedrooms: 1,
-    bathrooms: 1,
-    area: '45 m²',
-    type: 'Rent' as const,
-  },
-  {
-    id: 5,
-    image: 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=400',
-    title: 'Penthouse with City View',
-    price: '$2,500,000',
-    address: 'District 3, Ho Chi Minh City',
-    bedrooms: 3,
-    bathrooms: 3,
-    area: '200 m²',
-    type: 'Sale' as const,
-  },
-  {
-    id: 6,
-    image: 'https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?w=400',
-    title: 'Traditional Townhouse',
-    price: '$380,000',
-    address: 'Go Vap District',
-    bedrooms: 3,
-    bathrooms: 2,
-    area: '150 m²',
-    type: 'Sale' as const,
-  },
-];
+import { favoriteService, LikeType } from '@/lib/api/services/favorite.service';
+import { PropertyCard as PropertyCardType } from '@/lib/api/types';
 
 export default function FavoritesPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [favorites, setFavorites] = useState(mockFavorites.map(f => ({ ...f, isFavorite: true })));
-  const [filter, setFilter] = useState<'all' | 'Sale' | 'Rent'>('all');
+  const [favorites, setFavorites] = useState<PropertyCardType[]>([]);
+  const [filter, setFilter] = useState<'all' | 'SALE' | 'RENTAL'>('all');
+  const [isLoading, setIsLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalElements, setTotalElements] = useState(0);
 
-  const handleRemoveFavorite = (id: number | string) => {
-    setFavorites(favorites.filter(f => f.id !== id));
+  // Fetch favorite properties
+  useEffect(() => {
+    const fetchFavorites = async () => {
+      setIsLoading(true);
+      try {
+        const response = await favoriteService.getFavoriteProperties(currentPage, 12);
+        setFavorites(response.data || []);
+        setTotalPages(response.paging?.totalPages || 1);
+        setTotalElements(response.paging?.total || 0);
+      } catch (error) {
+        console.error('Failed to fetch favorites:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchFavorites();
+  }, [currentPage]);
+
+  const handleRemoveFavorite = async (id: string | number) => {
+    try {
+      await favoriteService.toggleLike(id as string, LikeType.PROPERTY);
+      // Remove from local state
+      setFavorites(favorites.filter(f => f.id !== id));
+      setTotalElements(prev => prev - 1);
+    } catch (error) {
+      console.error('Failed to remove favorite:', error);
+    }
   };
 
   const filteredFavorites = filter === 'all' 
     ? favorites 
-    : favorites.filter(f => f.type === filter);
+    : favorites.filter(f => f.transactionType === filter);
+
+  const getImageUrl = (url: string | null | undefined): string => {
+    const fallbackImage = 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800';
+    if (!url) return fallbackImage;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) return fallbackImage;
+    if (url.includes('.pdf')) return fallbackImage;
+    return url;
+  };
 
   return (
     <div className="space-y-6">
@@ -97,7 +68,7 @@ export default function FavoritesPage() {
             My Favorites
           </h1>
           <p className="text-gray-500 text-sm mt-1">
-            {favorites.length} properties saved
+            {isLoading ? 'Loading...' : `${totalElements} properties saved`}
           </p>
         </div>
 
@@ -113,17 +84,17 @@ export default function FavoritesPage() {
               All
             </button>
             <button
-              onClick={() => setFilter('Sale')}
+              onClick={() => setFilter('SALE')}
               className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                filter === 'Sale' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600'
+                filter === 'SALE' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600'
               }`}
             >
               For Sale
             </button>
             <button
-              onClick={() => setFilter('Rent')}
+              onClick={() => setFilter('RENTAL')}
               className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                filter === 'Rent' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600'
+                filter === 'RENTAL' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600'
               }`}
             >
               For Rent
@@ -152,35 +123,103 @@ export default function FavoritesPage() {
         </div>
       </div>
 
-      {/* Properties Grid */}
-      {filteredFavorites.length > 0 ? (
-        <div className={`grid gap-6 ${
-          viewMode === 'grid' 
-            ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4' 
-            : 'grid-cols-1'
-        }`}>
-          {filteredFavorites.map((property) => (
-            <PropertyCard
-              key={property.id}
-              {...property}
-              isFavorite={true}
-              onFavoriteToggle={handleRemoveFavorite}
-            />
-          ))}
+      {/* Loading State */}
+      {isLoading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="w-8 h-8 text-red-600 animate-spin" />
         </div>
+      ) : filteredFavorites.length > 0 ? (
+        <>
+          {/* Properties Grid */}
+          <div className={`grid gap-6 ${
+            viewMode === 'grid' 
+              ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4' 
+              : 'grid-cols-1'
+          }`}>
+            {filteredFavorites.map((property) => (
+              <PropertyCard
+                key={property.id}
+                id={property.id}
+                image={getImageUrl(property.thumbnailUrl)}
+                title={property.title}
+                price={`${property.price.toLocaleString('vi-VN')} VND`}
+                priceUnit={property.transactionType === 'RENTAL' ? '/tháng' : ''}
+                address={property.location}
+                area={`${property.totalArea}m²`}
+                numberOfImages={property.numberOfImages}
+                type={property.transactionType === 'SALE' ? 'Sale' : 'Rent'}
+                status={property.status === 'AVAILABLE' ? 'Available' : property.status === 'SOLD' ? 'Sold' : property.status === 'RENTED' ? 'Rented' : 'Pending'}
+                isFavorite={true}
+                onFavoriteToggle={handleRemoveFavorite}
+                showFavorite={true}
+                variant="profile"
+              />
+            ))}
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex justify-center mt-8">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
+                >
+                  Previous
+                </button>
+                
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={`w-10 h-10 rounded-lg text-sm font-medium transition-colors ${
+                        currentPage === pageNum
+                          ? 'bg-red-600 text-white'
+                          : 'border border-gray-300 text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+                
+                <button
+                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                  disabled={currentPage === totalPages}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       ) : (
+        /* Empty State */
         <div className="flex flex-col items-center justify-center py-16 bg-white rounded-2xl border border-gray-100">
           <Heart className="w-16 h-16 text-gray-300 mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No favorites yet</h3>
           <p className="text-gray-500 text-sm text-center max-w-sm">
             Start exploring properties and save your favorites to view them here
           </p>
-          <a
+          <Link
             href="/properties"
             className="mt-4 px-6 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium text-sm"
           >
             Explore Properties
-          </a>
+          </Link>
         </div>
       )}
     </div>

@@ -16,9 +16,9 @@ export default function Badge({ children, variant = 'default', className = '' }:
   const variantStyles: Record<BadgeVariant, string> = {
     default: 'bg-gray-100 text-gray-800 border border-gray-200',
     success: 'bg-green-100 text-green-700 border border-green-200', // Success
-    danger: 'bg-red-100 text-red-600 border border-red-200',
+    danger: 'bg-green-100 text-green-700 border border-green-200', // For Sale - Light green
     warning: 'bg-yellow-100 text-yellow-800 border border-yellow-200',
-    info: 'bg-blue-100 text-blue-700 border border-blue-200',
+    info: 'bg-blue-100 text-blue-700 border border-blue-200', // For Rent - Light blue
     pink: 'bg-pink-100 text-pink-600 border border-pink-200', // Platinum
     yellow: "bg-yellow-100 text-yellow-600",
     gold: 'bg-yellow-50 text-yellow-600 border border-yellow-200', // Gold
@@ -49,7 +49,7 @@ export default function Badge({ children, variant = 'default', className = '' }:
 
   return (
     <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded text-[10px] font-bold uppercase leading-4 border ${variantStyles[variant]} ${className}`}
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-sm text-[10px] font-bold uppercase leading-4 ${variantStyles[variant]} ${className}`}
     >
       {children}
     </span>

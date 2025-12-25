@@ -66,6 +66,9 @@ export interface DocumentResponse {
   id: string;
   filePath: string;
   documentType: string;
+  documentTypeName?: string;
+  documentName?: string;
+  verificationStatus?: string;
 }
 
 export interface SimpleUserResponse {
@@ -123,6 +126,7 @@ export interface PropertyDetails {
   status: string;
   viewCount?: number;
   approvedAt?: string;
+  isFavorite?: boolean;
   mediaList: MediaResponse[];
   documentList: DocumentResponse[];
 }

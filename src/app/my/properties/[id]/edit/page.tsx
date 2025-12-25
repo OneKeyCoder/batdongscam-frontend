@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Upload, MapPin, Building, Bed, Bath, Square, DollarSign, Tag, Home, Image as ImageIcon, X, Check, Camera, FileText } from 'lucide-react';
+import { ArrowLeft, Upload, MapPin, Building, Bed, Bath, Square, DollarSign, Tag, Home, Image as ImageIcon, X, Check, Camera, FileText, Loader2 } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { propertyService, CreatePropertyRequest } from '@/lib/api/services/property.service';
 import { locationService, PropertyType as PropertyTypeData } from '@/lib/api/services/location.service';
 
@@ -16,6 +16,7 @@ interface PropertyForm {
   propertyTypeId: string;
   price: string;
   priceUnit: string;
+  rentPeriod?: string;
   address: string;
   cityId: string;
   districtId: string;
@@ -38,10 +39,19 @@ const availableFeatures = [
   'Gym', 'Elevator', 'Balcony', 'Fireplace', 'Smart Home', 'Solar Panels', 'Pet Friendly'
 ];
 
-export default function CreatePropertyPage() {
+export default function EditPropertyPage() {
   const router = useRouter();
+  const params = useParams();
+  const propertyId = params.id as string;
+  
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [existingImages, setExistingImages] = useState<Array<{id: string, url: string}>>([]);
+  const [existingDocuments, setExistingDocuments] = useState<Array<{id: string, name: string, url: string}>>([]);
+  const [mediaIdsToRemove, setMediaIdsToRemove] = useState<string[]>([]);
+  const [documentIdsToRemove, setDocumentIdsToRemove] = useState<string[]>([]);
+  
   const [formData, setFormData] = useState<PropertyForm>({
     title: '',
     description: '',
@@ -71,13 +81,116 @@ export default function CreatePropertyPage() {
   const [wards, setWards] = useState<Map<string, string>>(new Map());
   const [isLoadingLocations, setIsLoadingLocations] = useState(false);
 
+  // Fetch property data for editing
+  useEffect(() => {
+    const fetchProperty = async () => {
+      try {
+        setIsLoading(true);
+        const property = await propertyService.getPropertyDetails(propertyId);
+        
+        const propertyTypeId = (property as any).propertyTypeId || '';
+        const wardId = (property as any).wardId || '';
+        
+        // Fetch location data if we have wardId
+        // We need to fetch the ward details to get district and city IDs
+        let cityId = '';
+        let districtId = '';
+        
+        if (wardId) {
+          try {
+            // We need to get ward details which includes district and city
+            // For now, we'll need to fetch all cities, then districts, then find the ward
+            // This is not ideal but necessary given the flat structure
+            const citiesData = await locationService.getChildLocations('CITY');
+            
+            // Try each city to find the one containing our ward
+            for (const [cId, cityName] of citiesData.entries()) {
+              const districtsData = await locationService.getChildLocations('DISTRICT', cId);
+              for (const [dId, districtName] of districtsData.entries()) {
+                const wardsData = await locationService.getChildLocations('WARD', dId);
+                if (wardsData.has(wardId)) {
+                  cityId = cId;
+                  districtId = dId;
+                  setDistricts(districtsData);
+                  setWards(wardsData);
+                  break;
+                }
+              }
+              if (cityId) break;
+            }
+          } catch (error) {
+            console.error('Error fetching location hierarchy:', error);
+          }
+        }
+        
+        // Set existing media
+        if (property.mediaList && property.mediaList.length > 0) {
+          setExistingImages(property.mediaList.map((m: any) => ({
+            id: m.id,
+            url: m.filePath
+          })));
+        }
+
+        // Set existing documents
+        if (property.documentList && property.documentList.length > 0) {
+          setExistingDocuments(property.documentList.map((d: any) => ({
+            id: d.id,
+            name: d.documentName,
+            url: d.filePath
+          })));
+        }
+        
+        // IMPORTANT: Set formData LAST, after all async operations
+        const newFormData: PropertyForm = {
+          title: property.title || '',
+          description: property.description || '',
+          type: property.transactionType === 'SALE' ? 'Sale' as TransactionType : 'Rent' as TransactionType,
+          propertyTypeId: propertyTypeId,
+          price: property.priceAmount?.toString() || '',
+          priceUnit: 'USD',
+          address: property.fullAddress || '',
+          cityId: cityId,
+          districtId: districtId,
+          wardId: wardId,
+          bedrooms: property.bedrooms || 0,
+          bathrooms: property.bathrooms || 0,
+          rooms: property.rooms,
+          floors: property.floors,
+          area: property.area?.toString() || '',
+          yearBuilt: property.yearBuilt?.toString() || '',
+          houseOrientation: property.houseOrientation || '',
+          balconyOrientation: property.balconyOrientation || '',
+          features: property.amenities ? property.amenities.split(',').map(f => f.trim()) : [],
+          images: [],
+          documents: [],
+        };
+        
+        console.log('📝 Form Data to Set:', newFormData);
+        
+        setFormData(newFormData);
+        
+        // Set loading to false AFTER everything is set
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Error fetching property:', error);
+        alert('Failed to load property details');
+        router.push('/my/properties');
+        setIsLoading(false);
+      }
+    };
+
+    if (propertyId) {
+      fetchProperty();
+    }
+  }, [propertyId, router]);
+
   // Fetch property types and cities on mount
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
         const [typesData, citiesData] = await Promise.all([
           locationService.getPropertyTypes(),
-          locationService.getCities()
+          locationService.getChildLocations('CITY')
         ]);
         setPropertyTypes(typesData);
         setCities(citiesData);
@@ -88,37 +201,50 @@ export default function CreatePropertyPage() {
     fetchInitialData();
   }, []);
 
-  // Fetch districts when city changes
+  // Fetch districts when city changes (but not on initial load)
   useEffect(() => {
-    if (formData.cityId) {
-      setIsLoadingLocations(true);
-      locationService.getDistricts(formData.cityId)
-        .then(districtsData => {
-          setDistricts(districtsData);
-          setWards(new Map()); // Reset wards
-          setFormData(prev => ({ ...prev, districtId: '', wardId: '' }));
-        })
-        .catch(error => console.error('Error fetching districts:', error))
-        .finally(() => setIsLoadingLocations(false));
-    } else {
+    // Skip if we're still loading initial data
+    if (isLoading) return;
+    
+    // Skip if city hasn't changed from initial value
+    if (!formData.cityId) {
       setDistricts(new Map());
       setWards(new Map());
+      return;
+    }
+    
+    // Only fetch if districts aren't already loaded for this city
+    if (districts.size === 0 || formData.cityId) {
+      setIsLoadingLocations(true);
+      locationService.getChildLocations('DISTRICT', formData.cityId)
+        .then((districtsData: Map<string, string>) => {
+          setDistricts(districtsData);
+        })
+        .catch((error: any) => console.error('Error fetching districts:', error))
+        .finally(() => setIsLoadingLocations(false));
     }
   }, [formData.cityId]);
 
-  // Fetch wards when district changes
+  // Fetch wards when district changes (but not on initial load)
   useEffect(() => {
-    if (formData.districtId) {
-      setIsLoadingLocations(true);
-      locationService.getWards(formData.districtId)
-        .then(wardsData => {
-          setWards(wardsData);
-          setFormData(prev => ({ ...prev, wardId: '' }));
-        })
-        .catch(error => console.error('Error fetching wards:', error))
-        .finally(() => setIsLoadingLocations(false));
-    } else {
+    // Skip if we're still loading initial data
+    if (isLoading) return;
+    
+    // Skip if district hasn't changed from initial value
+    if (!formData.districtId) {
       setWards(new Map());
+      return;
+    }
+    
+    // Only fetch if wards aren't already loaded for this district
+    if (wards.size === 0 || formData.districtId) {
+      setIsLoadingLocations(true);
+      locationService.getChildLocations('WARD', formData.districtId)
+        .then((wardsData: Map<string, string>) => {
+          setWards(wardsData);
+        })
+        .catch((error: any) => console.error('Error fetching wards:', error))
+        .finally(() => setIsLoadingLocations(false));
     }
   }, [formData.districtId]);
 
@@ -196,16 +322,11 @@ export default function CreatePropertyPage() {
         return;
       }
 
-      // Get location names for full address
-      const cityName = cities.get(formData.cityId) || '';
-      const districtName = districts.get(formData.districtId) || '';
-      const wardName = wards.get(formData.wardId) || '';
-
-      const propertyData: CreatePropertyRequest = {
+      const propertyData: any = {
         title: formData.title,
         description: formData.description,
-        transactionType: formData.type.toUpperCase() as 'SALE' | 'RENT',
-        fullAddress: `${formData.address}, ${wardName}, ${districtName}, ${cityName}`,
+        transactionType: formData.type === 'Sale' ? 'SALE' : 'RENTAL',
+        fullAddress: formData.address,
         area: parseFloat(formData.area),
         priceAmount: parseFloat(formData.price.replace(/,/g, '')),
         bedrooms: formData.bedrooms || undefined,
@@ -218,19 +339,21 @@ export default function CreatePropertyPage() {
         amenities: formData.features.join(', '),
         propertyTypeId: formData.propertyTypeId,
         wardId: formData.wardId,
+        mediaIdsToRemove,
+        documentIdsToRemove,
       };
 
-      await propertyService.createProperty(
+      await propertyService.updateProperty(
+        propertyId,
         propertyData,
-        formData.images,
-        formData.documents
+        formData.images
       );
 
-      alert('Property created successfully!');
-      router.push('/owner/properties');
+      alert('Property updated successfully!');
+      router.push('/my/properties');
     } catch (error: any) {
-      console.error('Error creating property:', error);
-      alert(error.response?.data?.message || 'Failed to create property. Please try again.');
+      console.error('Error updating property:', error);
+      alert(error.response?.data?.message || 'Failed to update property. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -256,19 +379,30 @@ export default function CreatePropertyPage() {
   };
   const prevStep = () => setStep(step - 1);
 
+  if (isLoading) {
+    return (
+      <div className="max-w-4xl mx-auto py-16">
+        <div className="flex flex-col items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-red-600 mb-4" />
+          <p className="text-gray-600">Loading property details...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto py-8">
       {/* Header */}
       <div className="mb-6">
         <Link
-          href="/owner/properties"
+          href={`/property/${propertyId}`}
           className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 text-sm mb-4"
         >
           <ArrowLeft className="w-4 h-4" />
-          Back to Properties
+          Back to Property Details
         </Link>
-        <h1 className="text-2xl font-bold text-gray-900">Create New Property</h1>
-        <p className="text-gray-500 text-sm mt-1">Fill in the details to list your property</p>
+        <h1 className="text-2xl font-bold text-gray-900">Edit Property</h1>
+        <p className="text-gray-500 text-sm mt-1">Update your property details</p>
       </div>
 
       {/* Progress Steps */}
@@ -414,15 +548,15 @@ export default function CreatePropertyPage() {
               </div>
               {formData.type === 'Rent' && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Per</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Period</label>
                   <select
                     value={formData.rentPeriod || 'month'}
                     onChange={(e) => setFormData({ ...formData, rentPeriod: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
                   >
-                    <option value="month">/month</option>
-                    <option value="week">/week</option>
-                    <option value="year">/year</option>
+                    <option value="month">Month</option>
+                    <option value="week">Week</option>
+                    <option value="year">Year</option>
                   </select>
                 </div>
               )}
@@ -612,8 +746,12 @@ export default function CreatePropertyPage() {
                   <option value="WEST">West</option>
                   <option value="NORTHEAST">Northeast</option>
                   <option value="NORTHWEST">Northwest</option>
+                  <option value="NORTH_EAST">North East</option>
+                  <option value="NORTH_WEST">North West</option>
                   <option value="SOUTHEAST">Southeast</option>
                   <option value="SOUTHWEST">Southwest</option>
+                  <option value="SOUTH_EAST">South East</option>
+                  <option value="SOUTH_WEST">South West</option>
                 </select>
               </div>
               <div>
@@ -630,8 +768,12 @@ export default function CreatePropertyPage() {
                   <option value="WEST">West</option>
                   <option value="NORTHEAST">Northeast</option>
                   <option value="NORTHWEST">Northwest</option>
+                  <option value="NORTH_EAST">North East</option>
+                  <option value="NORTH_WEST">North West</option>
                   <option value="SOUTHEAST">Southeast</option>
                   <option value="SOUTHWEST">Southwest</option>
+                  <option value="SOUTH_EAST">South East</option>
+                  <option value="SOUTH_WEST">South West</option>
                 </select>
               </div>
             </div>
@@ -684,6 +826,39 @@ export default function CreatePropertyPage() {
               Images & Documents
             </h2>
 
+            {/* Existing Images */}
+            {existingImages.length > 0 && (
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-3">Current Images ({existingImages.length})</p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {existingImages.map((image, index) => (
+                    <div key={image.id} className="relative group aspect-square">
+                      <img 
+                        src={image.url} 
+                        alt={`Existing ${index + 1}`}
+                        className="w-full h-full object-cover rounded-xl"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMediaIdsToRemove([...mediaIdsToRemove, image.id]);
+                          setExistingImages(existingImages.filter(img => img.id !== image.id));
+                        }}
+                        className="absolute top-2 right-2 w-6 h-6 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                      {index === 0 && (
+                        <span className="absolute bottom-2 left-2 px-2 py-1 bg-red-600 text-white text-xs rounded font-medium">
+                          Cover
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Upload Area */}
             <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-red-400 transition-colors">
               <input
@@ -696,7 +871,7 @@ export default function CreatePropertyPage() {
               />
               <label htmlFor="image-upload" className="cursor-pointer">
                 <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-700 font-medium">Click to upload images</p>
+                <p className="text-gray-700 font-medium">Click to upload new images</p>
                 <p className="text-sm text-gray-500 mt-1">or drag and drop</p>
                 <p className="text-xs text-gray-400 mt-2">PNG, JPG up to 10MB each</p>
               </label>
@@ -705,7 +880,7 @@ export default function CreatePropertyPage() {
             {/* Image Previews */}
             {imagesPreviews.length > 0 && (
               <div>
-                <p className="text-sm font-medium text-gray-700 mb-3">Uploaded Images ({imagesPreviews.length})</p>
+                <p className="text-sm font-medium text-gray-700 mb-3">New Images to Upload ({imagesPreviews.length})</p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {imagesPreviews.map((preview, index) => (
                     <div key={index} className="relative group aspect-square">
@@ -739,6 +914,33 @@ export default function CreatePropertyPage() {
                 Property Documents
               </h3>
               
+              {/* Existing Documents */}
+              {existingDocuments.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-sm font-medium text-gray-700 mb-3">Current Documents ({existingDocuments.length})</p>
+                  <div className="space-y-2">
+                    {existingDocuments.map((doc) => (
+                      <div key={doc.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg group hover:bg-gray-100 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <FileText className="w-5 h-5 text-red-600" />
+                          <span className="text-sm text-gray-700 font-medium">{doc.name}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDocumentIdsToRemove([...documentIdsToRemove, doc.id]);
+                            setExistingDocuments(existingDocuments.filter(d => d.id !== doc.id));
+                          }}
+                          className="w-6 h-6 bg-red-100 text-red-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-red-200"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Document Upload Area */}
               <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-red-400 transition-colors">
                 <input
@@ -751,7 +953,7 @@ export default function CreatePropertyPage() {
                 />
                 <label htmlFor="document-upload" className="cursor-pointer">
                   <FileText className="w-10 h-10 text-gray-400 mx-auto mb-3" />
-                  <p className="text-gray-700 font-medium">Upload documents</p>
+                  <p className="text-gray-700 font-medium">Upload new documents</p>
                   <p className="text-sm text-gray-500 mt-1">Contracts, certificates, blueprints, etc.</p>
                   <p className="text-xs text-gray-400 mt-2">PDF, DOC, DOCX, TXT up to 10MB each</p>
                 </label>
@@ -799,8 +1001,17 @@ export default function CreatePropertyPage() {
                     : 'bg-red-600 hover:bg-red-700'
                 } text-white`}
               >
-                <Check className="w-5 h-5" />
-                {isSubmitting ? 'Creating...' : 'Create Property'}
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-5 h-5" />
+                    Save Changes
+                  </>
+                )}
               </button>
             </div>
           </div>

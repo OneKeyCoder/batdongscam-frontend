@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { locationService, City, District, Ward } from '@/lib/api/services/location.service';
+import { locationService } from '@/lib/api/services/location.service';
 import { ChevronDown } from 'lucide-react';
 
 interface LocationSelectorProps {
@@ -19,9 +19,9 @@ export default function LocationSelector({
   defaultValues,
   required = false 
 }: LocationSelectorProps) {
-  const [cities, setCities] = useState<City[]>([]);
-  const [districts, setDistricts] = useState<District[]>([]);
-  const [wards, setWards] = useState<Ward[]>([]);
+  const [cities, setCities] = useState<Map<string, string>>(new Map());
+  const [districts, setDistricts] = useState<Map<string, string>>(new Map());
+  const [wards, setWards] = useState<Map<string, string>>(new Map());
   
   const [selectedCityId, setSelectedCityId] = useState(defaultValues?.cityId || '');
   const [selectedDistrictId, setSelectedDistrictId] = useState(defaultValues?.districtId || '');
@@ -63,7 +63,7 @@ export default function LocationSelector({
       };
       fetchDistricts();
     } else {
-      setDistricts([]);
+      setDistricts(new Map());
       setSelectedDistrictId('');
     }
   }, [selectedCityId]);
@@ -84,17 +84,19 @@ export default function LocationSelector({
       };
       fetchWards();
     } else {
-      setWards([]);
+      setWards(new Map());
       setSelectedWardId('');
     }
   }, [selectedDistrictId]);
 
-  // Notify parent when ward changes
+  // Notify parent when all selections are complete - ONLY when values actually change
   useEffect(() => {
+    // Only notify if we have all three values AND they're not empty
     if (selectedWardId && selectedDistrictId && selectedCityId) {
       onLocationChange(selectedWardId, selectedDistrictId, selectedCityId);
     }
-  }, [selectedWardId, selectedDistrictId, selectedCityId, onLocationChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedWardId]); // Only trigger when wardId changes (final selection)
 
   const handleCityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedCityId(e.target.value);
@@ -129,9 +131,9 @@ export default function LocationSelector({
             <option value="">
               {isLoadingCities ? 'Loading cities...' : 'Select city/province'}
             </option>
-            {cities.map((city) => (
-              <option key={city.cityId} value={city.cityId}>
-                {city.cityName}
+            {Array.from(cities.entries()).map(([id, name]) => (
+              <option key={id} value={id}>
+                {name}
               </option>
             ))}
           </select>
@@ -155,9 +157,9 @@ export default function LocationSelector({
             <option value="">
               {isLoadingDistricts ? 'Loading districts...' : 'Select district'}
             </option>
-            {districts.map((district) => (
-              <option key={district.districtId} value={district.districtId}>
-                {district.districtName}
+            {Array.from(districts.entries()).map(([id, name]) => (
+              <option key={id} value={id}>
+                {name}
               </option>
             ))}
           </select>
@@ -181,9 +183,9 @@ export default function LocationSelector({
             <option value="">
               {isLoadingWards ? 'Loading wards...' : 'Select ward/commune'}
             </option>
-            {wards.map((ward) => (
-              <option key={ward.wardId} value={ward.wardId}>
-                {ward.wardName}
+            {Array.from(wards.entries()).map(([id, name]) => (
+              <option key={id} value={id}>
+                {name}
               </option>
             ))}
           </select>

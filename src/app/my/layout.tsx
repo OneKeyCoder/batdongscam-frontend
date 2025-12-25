@@ -7,14 +7,10 @@ export default function MyLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // In a real app, get role from auth context
-  // For now, default to customer
-  const role = 'customer';
-  
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <NavBar role={role as any} />
-      <main className="flex-1 w-full max-w-[85%] mx-auto px-4 py-8">
+      <NavBar />
+      <main className="flex-1 w-full max-w-[90%] mx-auto px-4 py-8">
         {children}
       </main>
       <Footer />

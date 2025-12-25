@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Building, Mail, Lock, Eye, EyeOff, User, Phone, Calendar, MapPin, FileText, Upload, ChevronRight, ChevronLeft, Check } from 'lucide-react';
@@ -42,6 +42,18 @@ export default function RegisterPage() {
     frontIdPicture: null as File | null,
     backIdPicture: null as File | null,
   });
+
+  // Image preview URLs
+  const [frontIdPreview, setFrontIdPreview] = useState<string | null>(null);
+  const [backIdPreview, setBackIdPreview] = useState<string | null>(null);
+
+  // Cleanup preview URLs on unmount
+  useEffect(() => {
+    return () => {
+      if (frontIdPreview) URL.revokeObjectURL(frontIdPreview);
+      if (backIdPreview) URL.revokeObjectURL(backIdPreview);
+    };
+  }, [frontIdPreview, backIdPreview]);
 
   const steps = [
     { number: 1, title: 'Personal Info', icon: User },
@@ -133,6 +145,16 @@ export default function RegisterPage() {
     const file = e.target.files?.[0];
     if (file) {
       setFormData({ ...formData, [field]: file });
+      
+      // Create preview URL
+      const previewUrl = URL.createObjectURL(file);
+      if (field === 'frontIdPicture') {
+        if (frontIdPreview) URL.revokeObjectURL(frontIdPreview);
+        setFrontIdPreview(previewUrl);
+      } else {
+        if (backIdPreview) URL.revokeObjectURL(backIdPreview);
+        setBackIdPreview(previewUrl);
+      }
     }
   };
 
@@ -454,12 +476,26 @@ export default function RegisterPage() {
                         id="frontIdPicture"
                         required
                       />
-                      <label htmlFor="frontIdPicture" className="cursor-pointer">
-                        <Upload className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                        <p className="text-sm text-gray-600">
-                          {formData.frontIdPicture ? formData.frontIdPicture.name : 'Click to upload front ID picture'}
-                        </p>
-                      </label>
+                      {frontIdPreview ? (
+                        <div className="space-y-3">
+                          <img 
+                            src={frontIdPreview} 
+                            alt="Front ID Preview" 
+                            className="max-h-48 mx-auto rounded-lg border border-gray-200"
+                          />
+                          <p className="text-sm text-gray-600">{formData.frontIdPicture?.name}</p>
+                          <label htmlFor="frontIdPicture" className="inline-block px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 cursor-pointer text-sm">
+                            Change Image
+                          </label>
+                        </div>
+                      ) : (
+                        <label htmlFor="frontIdPicture" className="cursor-pointer">
+                          <Upload className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                          <p className="text-sm text-gray-600">
+                            Click to upload front ID picture
+                          </p>
+                        </label>
+                      )}
                     </div>
                   </div>
 
@@ -476,12 +512,26 @@ export default function RegisterPage() {
                         id="backIdPicture"
                         required
                       />
-                      <label htmlFor="backIdPicture" className="cursor-pointer">
-                        <Upload className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                        <p className="text-sm text-gray-600">
-                          {formData.backIdPicture ? formData.backIdPicture.name : 'Click to upload back ID picture'}
-                        </p>
-                      </label>
+                      {backIdPreview ? (
+                        <div className="space-y-3">
+                          <img 
+                            src={backIdPreview} 
+                            alt="Back ID Preview" 
+                            className="max-h-48 mx-auto rounded-lg border border-gray-200"
+                          />
+                          <p className="text-sm text-gray-600">{formData.backIdPicture?.name}</p>
+                          <label htmlFor="backIdPicture" className="inline-block px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 cursor-pointer text-sm">
+                            Change Image
+                          </label>
+                        </div>
+                      ) : (
+                        <label htmlFor="backIdPicture" className="cursor-pointer">
+                          <Upload className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                          <p className="text-sm text-gray-600">
+                            Click to upload back ID picture
+                          </p>
+                        </label>
+                      )}
                     </div>
                   </div>
 

@@ -3,13 +3,12 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Building, MapPin, Bed, Bath, Square, Heart, Share2, Phone, Mail, Calendar, ChevronLeft, ChevronRight, Star, User, Check, Clock, Shield, Menu, X, Loader2, AlertCircle } from 'lucide-react';
+import { Building, MapPin, Bed, Bath, Square, Heart, Share2, Phone, Mail, Calendar, ChevronLeft, ChevronRight, Star, User, Check, Clock, Shield, Menu, X, Loader2, AlertCircle, Edit, FileText, Trash2, Eye, Download } from 'lucide-react';
 import NavBar from '@/app/components/layout/NavBar';
 import Modal from '@/app/components/ui/Modal';
-import DocumentList from '@/app/components/features/properties/details/DocumentList';
 import Footer from '@/app/components/layout/Footer';
-import { propertyService } from '@/lib/api/services/property.service';
-import { PropertyDetails } from '@/lib/api/types';
+import { propertyService, PropertyDetails } from '@/lib/api/services/property.service';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function PropertyDetailPage() {
   const params = useParams();
@@ -25,6 +24,8 @@ export default function PropertyDetailPage() {
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [previewDocument, setPreviewDocument] = useState<{url: string; name: string} | null>(null);
+  const { user } = useAuth();
   
   // Booking form state
   const [bookingForm, setBookingForm] = useState({
@@ -47,8 +48,7 @@ export default function PropertyDetailPage() {
       try {
         const data = await propertyService.getPropertyDetails(propertyId);
         setProperty(data);
-        // Set favorite status from API if available
-        // setIsFavorite(data.isFavorite || false);
+        setIsFavorite(data.isFavorite || false);
       } catch (err: any) {
         console.error('Failed to fetch property:', err);
         if (err.response?.status === 404) {
@@ -82,10 +82,11 @@ export default function PropertyDetailPage() {
   };
 
   const formatPrice = (amount: number, transactionType: string) => {
-    if (transactionType === 'RENT') {
-      return `$${amount.toLocaleString()}/month`;
+    const formattedAmount = amount.toLocaleString('vi-VN');
+    if (transactionType === 'RENT' || transactionType === 'RENTAL') {
+      return `${formattedAmount} VND/tháng`;
     }
-    return `$${amount.toLocaleString()}`;
+    return `${formattedAmount} VND`;
   };
 
   // Loading state
@@ -119,9 +120,9 @@ export default function PropertyDetailPage() {
     <div className="min-h-screen bg-gray-50">
       <NavBar />
 
-      <div className="pt-16">
+      <div>
         {/* Image Gallery */}
-        <div className="relative h-[50vh] lg:h-[60vh] bg-gray-900">
+        <div className="relative h-[65vh] lg:h-[75vh] bg-gray-900">
           <img
             src={property.mediaList[currentImage]?.filePath || 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=1200'}
             alt={property.title}
@@ -157,22 +158,53 @@ export default function PropertyDetailPage() {
                   currentImage === idx ? 'border-white' : 'border-transparent opacity-70 hover:opacity-100'
                 }`}
               >
-                <img src={media.filePath} alt="" className="w-full h-full object-cover" />
+                <img 
+                  src={media.filePath || 'https://via.placeholder.com/150'} 
+                  alt="" 
+                  className="w-full h-full object-cover" 
+                />
               </button>
             ))}
           </div>
 
           {/* Actions */}
           <div className="absolute top-4 right-4 flex gap-2">
+            {/* Favorite - Always visible */}
             <button
-              onClick={() => setIsFavorite(!isFavorite)}
+              onClick={() => {
+                if (!user) {
+                  window.location.href = '/login';
+                  return;
+                }
+                setIsFavorite(!isFavorite);
+              }}
               className="w-10 h-10 bg-white rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors shadow-lg"
             >
               <Heart className={`w-5 h-5 ${isFavorite ? 'fill-red-500 text-red-500' : 'text-gray-600'}`} />
             </button>
-            <button className="w-10 h-10 bg-white rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors shadow-lg">
-              <Share2 className="w-5 h-5 text-gray-600" />
-            </button>
+            
+            {/* Edit & Delete - Only for owner */}
+            {user && user.id === property.owner.id && (
+              <>
+                <Link
+                  href={`/my/properties/${property.id}/edit`}
+                  className="w-10 h-10 bg-white rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors shadow-lg"
+                >
+                  <Edit className="w-5 h-5 text-gray-600" />
+                </Link>
+                <button
+                  onClick={() => {
+                    if (confirm('Are you sure you want to delete this property?')) {
+                      // TODO: Call delete API
+                      alert('Property deleted!');
+                    }
+                  }}
+                  className="w-10 h-10 bg-white rounded-full flex items-center justify-center hover:bg-red-50 transition-colors shadow-lg group"
+                >
+                  <Trash2 className="w-5 h-5 text-gray-600 group-hover:text-red-600" />
+                </button>
+              </>
+            )}
           </div>
 
           {/* Type Badge */}
@@ -185,7 +217,7 @@ export default function PropertyDetailPage() {
           </div>
         </div>
 
-        <div className="max-w-[85%] mx-auto px-4 py-8">
+        <div className="max-w-[90%] mx-auto px-4 py-8">
           <div className="grid lg:grid-cols-3 gap-8">
             {/* Main Content */}
             <div className="lg:col-span-2 space-y-8">
@@ -196,6 +228,10 @@ export default function PropertyDetailPage() {
                 <p className="text-gray-600 flex items-center gap-2 mt-2">
                   <MapPin className="w-5 h-5 text-gray-400" />
                   {property.fullAddress}
+                  {/* For some reason the fucking seed data itself has wardName in the fullAddress so we comment this */}
+                  {/* {(property as any).wardName && `, ${(property as any).wardName}`} */}
+                  {(property as any).districtName && `, ${(property as any).districtName}`}
+                  {(property as any).cityName && `, ${(property as any).cityName}`}
                 </p>
               </div>
 
@@ -230,27 +266,20 @@ export default function PropertyDetailPage() {
                 </div>
               </div>
 
-              {/* Features */}
-              {/* Features - Note: API doesn't provide features list, showing property type */}
+              {/* Property Information */}
               <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                 <h2 className="text-xl font-bold text-gray-900 mb-4">Property Information</h2>
                 <div className="grid grid-cols-2 gap-4">
-                  {property.propertyType && (
+                  {property.propertyTypeName && (
                     <div className="flex items-center gap-2 text-gray-600">
                       <Check className="w-5 h-5 text-green-500" />
-                      {property.propertyType.typeName}
+                      Type: {property.propertyTypeName}
                     </div>
                   )}
-                  {property.houseOrientation && (
+                  {property.rooms && (
                     <div className="flex items-center gap-2 text-gray-600">
                       <Check className="w-5 h-5 text-green-500" />
-                      House Orientation: {property.houseOrientation}
-                    </div>
-                  )}
-                  {property.balconyOrientation && (
-                    <div className="flex items-center gap-2 text-gray-600">
-                      <Check className="w-5 h-5 text-green-500" />
-                      Balcony Orientation: {property.balconyOrientation}
+                      {property.rooms} Rooms
                     </div>
                   )}
                   {property.floors && (
@@ -259,11 +288,88 @@ export default function PropertyDetailPage() {
                       {property.floors} Floors
                     </div>
                   )}
+                  {property.houseOrientation && (
+                    <div className="flex items-center gap-2 text-gray-600">
+                      <Check className="w-5 h-5 text-green-500" />
+                      House: {property.houseOrientation}
+                    </div>
+                  )}
+                  {property.balconyOrientation && (
+                    <div className="flex items-center gap-2 text-gray-600">
+                      <Check className="w-5 h-5 text-green-500" />
+                      Balcony: {property.balconyOrientation}
+                    </div>
+                  )}
+                  {property.yearBuilt && (
+                    <div className="flex items-center gap-2 text-gray-600">
+                      <Check className="w-5 h-5 text-green-500" />
+                      Built in {property.yearBuilt}
+                    </div>
+                  )}
+                  {property.amenities && (
+                    <div className="col-span-2">
+                      <p className="font-medium text-gray-900 mb-2">Amenities:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {property.amenities.split(',').map((amenity, idx) => (
+                          <span key={idx} className="px-3 py-1 bg-green-50 text-green-700 rounded-full text-sm">
+                            {amenity.trim()}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Attached Documents - Note: API doesn't provide documents */}
-              {/* <DocumentList documents={[]} /> */}
+              {/* Attached Documents */}
+              {property.documentList && property.documentList.length > 0 && (
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                  <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-red-600" />
+                    Attached Documents
+                  </h2>
+                  <div className="space-y-3">
+                    {property.documentList.map((doc) => (
+                      <div
+                        key={doc.id}
+                        className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <FileText className="w-5 h-5 text-red-600" />
+                          <div>
+                            <p className="font-medium text-gray-900">{doc.documentTypeName}</p>
+                            <p className="text-sm text-gray-500">{doc.documentName}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-700 rounded mr-2">
+                            {doc.verificationStatus}
+                          </span>
+                          {/* Preview Button */}
+                          <button
+                            onClick={() => setPreviewDocument({ url: doc.filePath, name: doc.documentName || 'Document' })}
+                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 transition-colors"
+                            title="Preview document"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          {/* Download Button */}
+                          <a
+                            href={doc.filePath}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            download
+                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-green-50 hover:bg-green-100 text-green-600 transition-colors"
+                            title="Download document"
+                          >
+                            <Download className="w-4 h-4" />
+                          </a>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Sidebar */}
@@ -273,7 +379,10 @@ export default function PropertyDetailPage() {
                 <h3 className="text-lg font-bold text-gray-900 mb-4">Property Owner</h3>
                 
                 {/* Owner Info - Primary */}
-                <div className="flex items-center gap-4 mb-6 pb-6 border-b border-gray-100">
+                <Link 
+                  href={`/profile/${property.owner.id}`}
+                  className="flex items-center gap-4 mb-4 hover:bg-gray-50 p-3 rounded-lg transition-colors cursor-pointer"
+                >
                   <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-bold">
                     {`${property.owner.firstName[0]}${property.owner.lastName[0]}`}
                   </div>
@@ -283,26 +392,42 @@ export default function PropertyDetailPage() {
                       <Shield className="w-4 h-4 text-green-500" />
                     </p>
                     <p className="text-sm text-gray-500">Property Owner</p>
+                    <p className="text-xs text-gray-500">{property.owner.phoneNumber}</p>
                   </div>
-                </div>
+                </Link>
 
-                {/* Agent Info - Secondary */}
-                {property.agent && (
-                  <div className="flex items-center gap-3 mb-6 p-3 bg-gray-50 rounded-lg">
-                    <User className="w-5 h-5 text-gray-400" />
-                    <div>
-                      <p className="text-sm text-gray-500">Sales Agent</p>
-                      <p className="font-medium text-gray-900 flex items-center gap-1">
-                        {property.agent.firstName} {property.agent.lastName}
-                      </p>
-                      <p className="text-xs text-gray-500">{property.agent.phoneNumber}</p>
-                    </div>
+                {/* Agent Info - Matching Owner Card Style */}
+                {property.assignedAgent && (
+                  <div className="border-t border-gray-100 pt-4 mt-4 pb-4">
+                    <h3 className="text-lg font-bold text-gray-900 mb-4">Sales Agent</h3>
+                    <Link
+                      href={`/profile/${property.assignedAgent.id}`}
+                      className="flex items-center gap-4 hover:bg-gray-50 p-3 rounded-lg transition-colors cursor-pointer"
+                    >
+                      <div className="w-14 h-14 bg-gradient-to-br from-green-500 to-green-600 rounded-full flex items-center justify-center text-white font-bold">
+                        {`${property.assignedAgent.firstName[0]}${property.assignedAgent.lastName[0]}`}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-900 flex items-center gap-2">
+                          {property.assignedAgent.firstName} {property.assignedAgent.lastName}
+                          <Shield className="w-4 h-4 text-blue-500" />
+                        </p>
+                        <p className="text-sm text-gray-500">Sales Agent</p>
+                        <p className="text-xs text-gray-500">{property.assignedAgent.phoneNumber}</p>
+                      </div>
+                    </Link>
                   </div>
                 )}
 
-                <div className="space-y-3">
+                <div className="space-y-3 mt-3">
                   <button
-                    onClick={() => setShowBookingModal(true)}
+                    onClick={() => {
+                      if (!user) {
+                        window.location.href = '/login';
+                        return;
+                      }
+                      setShowBookingModal(true);
+                    }}
                     className="w-full py-3 bg-red-600 text-white font-medium rounded-xl hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
                   >
                     <Calendar className="w-5 h-5" />
@@ -430,6 +555,52 @@ export default function PropertyDetailPage() {
           </button>
         </form>
       </Modal>
+
+      {/* Document Preview Modal */}
+      {previewDocument && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
+          onClick={() => setPreviewDocument(null)}
+        >
+          <div 
+            className="relative bg-white rounded-2xl w-[90%] h-[90%] max-w-6xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h3 className="text-lg font-bold text-gray-900 truncate pr-4">
+                {previewDocument.name}
+              </h3>
+              <div className="flex items-center gap-2">
+                <a
+                  href={previewDocument.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  download
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+                >
+                  <Download className="w-4 h-4" />
+                  Download
+                </a>
+                <button
+                  onClick={() => setPreviewDocument(null)}
+                  className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-600" />
+                </button>
+              </div>
+            </div>
+            {/* Document Viewer */}
+            <div className="h-[calc(100%-65px)]">
+              <iframe
+                src={previewDocument.url}
+                className="w-full h-full"
+                title={previewDocument.name}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <Footer />

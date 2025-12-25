@@ -117,7 +117,7 @@ export interface PropertyCard {
   id: string;
   createdAt: string;
   updatedAt: string;
-  transactionType: 'SALE' | 'RENT' | null;
+  transactionType: 'SALE' | 'RENTAL' | null;
   title: string;
   thumbnailUrl: string;
   favorite: boolean;
@@ -134,6 +134,82 @@ export interface PropertyCard {
   agentFirstName?: string;
   agentLastName?: string;
   agentTier?: string;
+}
+
+export interface PropertyDetails {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  title: string;
+  description: string;
+  fullAddress: string;
+  priceAmount: number;
+  area: number;
+  transactionType: 'SALE' | 'RENT';
+  status: string;
+  rooms?: number;
+  bathrooms?: number;
+  bedrooms?: number;
+  floors?: number;
+  houseOrientation?: string;
+  balconyOrientation?: string;
+  yearBuilt?: number;
+  amenities?: string;
+  propertyTypeName?: string;
+  wardId?: string;
+  wardName?: string;
+  districtId?: string;
+  districtName?: string;
+  cityId?: string;
+  cityName?: string;
+  isFavorite?: boolean;
+  mediaList: Array<{
+    id: string;
+    filePath: string;
+    mediaType: string;
+  }>;
+  documentList?: Array<{
+    id: string;
+    documentTypeName: string;
+    documentName: string;
+    filePath: string;
+    verificationStatus: string;
+  }>;
+  owner: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    phoneNumber: string;
+    email?: string;
+  };
+  agent?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    phoneNumber: string;
+  };
+  assignedAgent?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    phoneNumber: string;
+  };
+  ward?: {
+    id: string;
+    wardName: string;
+    district: {
+      id: string;
+      districtName: string;
+      city: {
+        id: string;
+        cityName: string;
+      };
+    };
+  };
+  propertyType?: {
+    id: string;
+    typeName: string;
+  };
 }
 
 export interface PropertyFilters {

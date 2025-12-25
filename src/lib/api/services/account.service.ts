@@ -15,6 +15,7 @@ const ACCOUNT_ENDPOINTS = {
   SALE_AGENTS: '/account/sale-agents',
   CUSTOMERS: '/account/customers',
   PROPERTY_OWNERS: '/account/property-owners',
+  PUBLIC_PROFILE: (id: string) => `/public/account/${id}/other-profile`,
 };
 
 export interface UserProfile {
@@ -47,6 +48,11 @@ export interface UserProfile {
   profile?: any;
   statisticMonth?: any;
   statisticAll?: any;
+  propertyProfile?: {
+    totalListings: number;
+    totalSolds: number;
+    totalRentals: number;
+  };
 }
 
 export interface SaleAgentListItem {
@@ -437,5 +443,15 @@ export const accountService = {
       { params: filters }
     );
     return response.data;
+  },
+
+  /**
+   * Get public profile by user ID (for viewing other users' profiles)
+   */
+  async getPublicProfile(id: string): Promise<UserProfile> {
+    const response = await apiClient.get<SingleResponse<UserProfile>>(
+      ACCOUNT_ENDPOINTS.PUBLIC_PROFILE(id)
+    );
+    return response.data.data;
   },
 };

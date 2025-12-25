@@ -6,14 +6,8 @@ import { Building, Search, MapPin, Bed, Bath, Square, Heart, ChevronRight, Star,
 import NavBar from '@/app/components/layout/NavBar';
 import Footer from '@/app/components/layout/Footer';
 import { propertyService } from '@/lib/api/services/property.service';
+import { locationService, LocationCardResponse } from '@/lib/api/services/location.service';
 import { PropertyCard } from '@/lib/api/types';
-
-const locations = [
-  { name: 'District 1', count: 245, image: 'https://images.unsplash.com/photo-1583417319070-4a69db38a482?w=400' },
-  { name: 'District 7', count: 189, image: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=400' },
-  { name: 'Thu Duc City', count: 156, image: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=400' },
-  { name: 'Binh Thanh', count: 134, image: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=400' },
-];
 
 const stats = [
   { value: '10K+', label: 'Properties', icon: Building },
@@ -30,6 +24,10 @@ export default function LandingPage() {
   // Featured properties from API
   const [featuredProperties, setFeaturedProperties] = useState<PropertyCard[]>([]);
   const [isLoadingFeatured, setIsLoadingFeatured] = useState(true);
+
+  // Top cities from API
+  const [topCities, setTopCities] = useState<LocationCardResponse[]>([]);
+  const [isLoadingCities, setIsLoadingCities] = useState(true);
 
   // Fetch featured properties
   useEffect(() => {
@@ -52,11 +50,27 @@ export default function LandingPage() {
     fetchFeatured();
   }, []);
 
-  const formatPrice = (amount: number, transactionType: 'SALE' | 'RENT' | null) => {
-    if (transactionType === 'RENT') {
-      return `$${amount.toLocaleString()}/month`;
+  // Fetch top cities
+  useEffect(() => {
+    const fetchTopCities = async () => {
+      try {
+        const response = await locationService.getTopCities(1, 10);
+        setTopCities(response.data || []);
+      } catch (error) {
+        console.error('Failed to fetch top cities:', error);
+      } finally {
+        setIsLoadingCities(false);
+      }
+    };
+
+    fetchTopCities();
+  }, []);
+
+  const formatPrice = (amount: number, transactionType: 'SALE' | 'RENTAL' | null) => {
+    if (transactionType === 'RENTAL') {
+      return `${amount.toLocaleString('vi-VN')} VND/tháng`;
     }
-    return `$${amount.toLocaleString()}`;
+    return `${amount.toLocaleString('vi-VN')} VND`;
   };
 
   // Helper to convert image URLs - only accept absolute URLs
@@ -89,7 +103,7 @@ export default function LandingPage() {
 
       {/* Hero Section */}
       <section className="pt-24 pb-16 bg-gradient-to-br from-red-50 via-white to-orange-50">
-        <div className="max-w-[85%] mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-[90%] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div>
               <h1 className="text-4xl lg:text-5xl font-bold text-gray-900 leading-tight">
@@ -174,7 +188,7 @@ export default function LandingPage() {
 
       {/* Featured Properties */}
       <section className="py-16 bg-gray-50">
-        <div className="max-w-[85%] mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-[90%] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between mb-8">
             <div>
               <h2 className="text-3xl font-bold text-gray-900">Featured Properties</h2>
@@ -258,38 +272,70 @@ export default function LandingPage() {
 
       {/* Popular Locations */}
       <section className="py-16">
-        <div className="max-w-[85%] mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-gray-900">Popular Locations</h2>
-            <p className="text-gray-600 mt-2">Explore properties in the most sought-after areas</p>
+        <div className="max-w-[90%] mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between mb-12">
+            <div>
+              <h2 className="text-3xl font-bold text-gray-900">Popular Cities</h2>
+              <p className="text-gray-600 mt-2">Explore properties in the most sought-after cities</p>
+            </div>
+            <Link
+              href="/locations"
+              className="hidden sm:flex items-center gap-2 text-red-600 font-medium hover:text-red-700"
+            >
+              View All Locations
+              <ArrowRight className="w-4 h-4" />
+            </Link>
           </div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {locations.map((location) => (
-              <Link
-                key={location.name}
-                href={`/properties?location=${location.name}`}
-                className="group relative h-64 rounded-2xl overflow-hidden"
-              >
-                <img
-                  src={location.image}
-                  alt={location.name}
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-                <div className="absolute bottom-4 left-4 text-white">
-                  <h3 className="text-xl font-bold">{location.name}</h3>
-                  <p className="text-sm text-white/80">{location.count} properties</p>
-                </div>
-              </Link>
-            ))}
+          {isLoadingCities ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="w-8 h-8 text-red-600 animate-spin" />
+            </div>
+          ) : (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {topCities.slice(0, 8).map((city) => (
+                <Link
+                  key={city.id}
+                  href={`/locations/${city.id}?type=CITY`}
+                  className="group relative h-64 rounded-2xl overflow-hidden"
+                >
+                  <img
+                    src={city.imgUrl || 'https://images.unsplash.com/photo-1583417319070-4a69db38a482?w=400'}
+                    alt={city.name}
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                  <div className="absolute bottom-4 left-4 right-4 text-white">
+                    <h3 className="text-xl font-bold">{city.name}</h3>
+                    <div className="flex items-center gap-4 mt-2 text-sm text-white/80">
+                      {city.totalArea && (
+                        <span>{city.totalArea.toLocaleString()} km²</span>
+                      )}
+                      {city.population && (
+                        <span>{(city.population / 1000).toFixed(0)}K people</span>
+                      )}
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+
+          <div className="sm:hidden mt-6 text-center">
+            <Link
+              href="/locations"
+              className="inline-flex items-center gap-2 text-red-600 font-medium"
+            >
+              View All Locations
+              <ArrowRight className="w-4 h-4" />
+            </Link>
           </div>
         </div>
       </section>
 
       {/* Why Choose Us */}
       <section className="py-16 bg-gray-50">
-        <div className="max-w-[85%] mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-[90%] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-gray-900">Why Choose BatDongScam?</h2>
             <p className="text-gray-600 mt-2">We make finding your perfect property easy and safe</p>
@@ -330,7 +376,7 @@ export default function LandingPage() {
 
       {/* CTA Section */}
       <section className="py-16 bg-red-600">
-        <div className="max-w-[85%] mx-auto px-4 sm:px-6 lg:px-8 text-center">
+        <div className="max-w-[90%] mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl font-bold text-white">Ready to Find Your Dream Home?</h2>
           <p className="text-red-100 mt-4 max-w-2xl mx-auto">
             Join thousands of happy customers who found their perfect property through BatDongScam

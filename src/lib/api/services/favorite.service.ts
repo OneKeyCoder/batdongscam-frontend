@@ -1,8 +1,10 @@
 import apiClient from '../client';
-import { SingleResponse } from '../types';
+import { SingleResponse, PaginatedResponse } from '../types';
+import { PropertyCard } from '../types';
 
 const FAVORITE_ENDPOINTS = {
   LIKE: '/favorites/like',
+  FAVORITE_PROPERTIES: '/favorites/properties/cards',
 };
 
 export enum LikeType {
@@ -16,7 +18,6 @@ export enum LikeType {
 export const favoriteService = {
   /**
    * Toggle like/unlike for an item
-   * Backend only supports POST /favorites/like - no GET endpoints for favorites lists
    */
   async toggleLike(id: string, likeType: LikeType): Promise<boolean> {
     const response = await apiClient.post<SingleResponse<boolean>>(
@@ -27,5 +28,15 @@ export const favoriteService = {
       }
     );
     return response.data.data;
+  },
+
+  async getFavoriteProperties(page: number = 1, limit: number = 15): Promise<PaginatedResponse<PropertyCard>> {
+    const response = await apiClient.get<PaginatedResponse<PropertyCard>>(
+      FAVORITE_ENDPOINTS.FAVORITE_PROPERTIES,
+      {
+        params: { page, limit },
+      }
+    );
+    return response.data;
   },
 };

@@ -9,8 +9,8 @@ export default function AgentLayout({
 }) {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <NavBar role="agent" />
-      <main className="flex-1 w-full max-w-[85%] mx-auto px-4 py-8">
+      <NavBar />
+      <main className="flex-1 w-full max-w-[90%] mx-auto px-4 py-8">
         {children}
       </main>
       <Footer />

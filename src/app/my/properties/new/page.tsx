@@ -1,31 +1,38 @@
 'use client';
 
-import React, { useState } from 'react';
-import { ArrowLeft, Upload, MapPin, Building, Bed, Bath, Square, DollarSign, Tag, Home, Image as ImageIcon, X, Check, Camera } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ArrowLeft, Upload, MapPin, Building, Bed, Bath, Square, DollarSign, Tag, Home, Image as ImageIcon, X, Check, Camera, FileText, Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { propertyService, CreatePropertyRequest } from '@/lib/api/services/property.service';
+import { locationService, PropertyType as PropertyTypeData } from '@/lib/api/services/location.service';
 
-type PropertyType = 'Sale' | 'Rent';
-type PropertyCategory = 'House' | 'Apartment' | 'Villa' | 'Land' | 'Commercial' | 'Other';
+type TransactionType = 'Sale' | 'Rent';
 
 interface PropertyForm {
   title: string;
   description: string;
-  type: PropertyType;
-  category: PropertyCategory;
+  type: TransactionType;
+  propertyTypeId: string;
   price: string;
   priceUnit: string;
+  rentPeriod?: string;
   address: string;
-  city: string;
-  district: string;
+  cityId: string;
+  districtId: string;
+  wardId: string;
   bedrooms: number;
   bathrooms: number;
+  rooms?: number;
+  floors?: number;
   area: string;
   yearBuilt: string;
+  houseOrientation?: string;
+  balconyOrientation?: string;
   features: string[];
   images: File[];
+  documents: File[];
 }
-
-const propertyCategories: PropertyCategory[] = ['House', 'Apartment', 'Villa', 'Land', 'Commercial', 'Other'];
 
 const availableFeatures = [
   'Swimming Pool', 'Garden', 'Garage', 'Air Conditioning', 'Security System',
@@ -33,25 +40,90 @@ const availableFeatures = [
 ];
 
 export default function CreatePropertyPage() {
+  const router = useRouter();
+  
   const [step, setStep] = useState(1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
   const [formData, setFormData] = useState<PropertyForm>({
     title: '',
     description: '',
     type: 'Sale',
-    category: 'House',
+    propertyTypeId: '',
     price: '',
     priceUnit: 'USD',
     address: '',
-    city: 'Ho Chi Minh City',
-    district: '',
+    cityId: '',
+    districtId: '',
+    wardId: '',
     bedrooms: 0,
     bathrooms: 0,
     area: '',
     yearBuilt: '',
     features: [],
     images: [],
+    documents: [],
   });
   const [imagesPreviews, setImagesPreviews] = useState<string[]>([]);
+  const [documentNames, setDocumentNames] = useState<string[]>([]);
+  
+  // Location and property type data
+  const [propertyTypes, setPropertyTypes] = useState<PropertyTypeData[]>([]);
+  const [cities, setCities] = useState<Map<string, string>>(new Map());
+  const [districts, setDistricts] = useState<Map<string, string>>(new Map());
+  const [wards, setWards] = useState<Map<string, string>>(new Map());
+  const [isLoadingLocations, setIsLoadingLocations] = useState(false);
+
+  // Fetch property types and cities on mount
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      try {
+        const [typesData, citiesData] = await Promise.all([
+          locationService.getPropertyTypes(),
+          locationService.getCities()
+        ]);
+        setPropertyTypes(typesData);
+        setCities(citiesData);
+      } catch (error) {
+        console.error('Error fetching initial data:', error);
+      }
+    };
+    fetchInitialData();
+  }, []);
+
+  // Fetch districts when city changes
+  useEffect(() => {
+    if (formData.cityId) {
+      setIsLoadingLocations(true);
+      locationService.getDistricts(formData.cityId)
+        .then(districtsData => {
+          setDistricts(districtsData);
+          setWards(new Map());
+          setFormData(prev => ({ ...prev, districtId: '', wardId: '' }));
+        })
+        .catch(error => console.error('Error fetching districts:', error))
+        .finally(() => setIsLoadingLocations(false));
+    } else {
+      setDistricts(new Map());
+      setWards(new Map());
+    }
+  }, [formData.cityId]);
+
+  // Fetch wards when district changes
+  useEffect(() => {
+    if (formData.districtId) {
+      setIsLoadingLocations(true);
+      locationService.getWards(formData.districtId)
+        .then(wardsData => {
+          setWards(wardsData);
+          setFormData(prev => ({ ...prev, wardId: '' }));
+        })
+        .catch(error => console.error('Error fetching wards:', error))
+        .finally(() => setIsLoadingLocations(false));
+    } else {
+      setWards(new Map());
+    }
+  }, [formData.districtId]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -78,6 +150,23 @@ export default function CreatePropertyPage() {
     setImagesPreviews(imagesPreviews.filter((_, i) => i !== index));
   };
 
+  const handleDocumentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files) {
+      const newFiles = Array.from(files);
+      setFormData({ ...formData, documents: [...formData.documents, ...newFiles] });
+      setDocumentNames(prev => [...prev, ...newFiles.map(f => f.name)]);
+    }
+  };
+
+  const removeDocument = (index: number) => {
+    setFormData({
+      ...formData,
+      documents: formData.documents.filter((_, i) => i !== index)
+    });
+    setDocumentNames(documentNames.filter((_, i) => i !== index));
+  };
+
   const toggleFeature = (feature: string) => {
     if (formData.features.includes(feature)) {
       setFormData({
@@ -92,22 +181,85 @@ export default function CreatePropertyPage() {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Submit to backend
-    console.log('Submitting:', formData);
-    alert('Property created successfully!');
+    setIsSubmitting(true);
+
+    try {
+      // Validate required fields
+      if (!formData.wardId) {
+        alert('Please select a ward (city, district, and ward are required)');
+        setIsSubmitting(false);
+        return;
+      }
+      
+      if (!formData.propertyTypeId) {
+        alert('Please select a property type');
+        setIsSubmitting(false);
+        return;
+      }
+
+      const propertyData: CreatePropertyRequest = {
+        title: formData.title,
+        description: formData.description,
+        transactionType: formData.type === 'Sale' ? 'SALE' : 'RENTAL',
+        fullAddress: formData.address,
+        area: parseFloat(formData.area),
+        priceAmount: parseFloat(formData.price.replace(/,/g, '')),
+        bedrooms: formData.bedrooms || undefined,
+        bathrooms: formData.bathrooms || undefined,
+        rooms: formData.rooms,
+        floors: formData.floors,
+        houseOrientation: formData.houseOrientation as any,
+        balconyOrientation: formData.balconyOrientation as any,
+        yearBuilt: formData.yearBuilt ? parseInt(formData.yearBuilt) : undefined,
+        amenities: formData.features.join(', '),
+        propertyTypeId: formData.propertyTypeId,
+        wardId: formData.wardId,
+      };
+
+      await propertyService.createProperty(
+        propertyData,
+        formData.images,
+        formData.documents
+      );
+
+      alert('Property created successfully!');
+      router.push('/my/properties');
+    } catch (error: any) {
+      console.error('Error creating property:', error);
+      alert(error.response?.data?.message || 'Failed to create property. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const nextStep = () => setStep(step + 1);
+  const nextStep = () => {
+    // Validation for Step 1
+    if (step === 1) {
+      if (!formData.title || !formData.description || !formData.type || 
+          !formData.propertyTypeId || !formData.price) {
+        alert('Please fill in all required fields');
+        return;
+      }
+    }
+    // Validation for Step 2
+    if (step === 2) {
+      if (!formData.area || !formData.address || !formData.wardId) {
+        alert('Please fill in all required fields including address and location');
+        return;
+      }
+    }
+    setStep(step + 1);
+  };
   const prevStep = () => setStep(step - 1);
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto py-8">
       {/* Header */}
       <div className="mb-6">
         <Link
-          href="/owner/properties"
+          href="/my/properties"
           className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 text-sm mb-4"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -129,7 +281,7 @@ export default function CreatePropertyPage() {
             <span className={`ml-2 text-sm font-medium ${
               step >= s ? 'text-gray-900' : 'text-gray-500'
             }`}>
-              {s === 1 ? 'Basic Info' : s === 2 ? 'Details' : 'Images'}
+              {s === 1 ? 'Basic Info' : s === 2 ? 'Details' : 'Images & Docs'}
             </span>
             {s < 3 && <div className={`flex-1 h-1 mx-4 rounded ${step > s ? 'bg-red-600' : 'bg-gray-200'}`} />}
           </div>
@@ -155,7 +307,7 @@ export default function CreatePropertyPage() {
                   className={`p-4 rounded-xl border-2 text-center transition-all ${
                     formData.type === 'Sale'
                       ? 'border-red-500 bg-red-50 text-red-700'
-                      : 'border-gray-200 hover:border-gray-300'
+                      : 'border-gray-200 hover:border-gray-300 text-gray-900'
                   }`}
                 >
                   <DollarSign className="w-6 h-6 mx-auto mb-2" />
@@ -167,7 +319,7 @@ export default function CreatePropertyPage() {
                   className={`p-4 rounded-xl border-2 text-center transition-all ${
                     formData.type === 'Rent'
                       ? 'border-red-500 bg-red-50 text-red-700'
-                      : 'border-gray-200 hover:border-gray-300'
+                      : 'border-gray-200 hover:border-gray-300 text-gray-900'
                   }`}
                 >
                   <Home className="w-6 h-6 mx-auto mb-2" />
@@ -176,25 +328,22 @@ export default function CreatePropertyPage() {
               </div>
             </div>
 
-            {/* Category */}
+            {/* Property Type */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">Property Category</label>
-              <div className="grid grid-cols-3 gap-3">
-                {propertyCategories.map((cat) => (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => setFormData({ ...formData, category: cat })}
-                    className={`p-3 rounded-lg border text-center transition-all ${
-                      formData.category === cat
-                        ? 'border-red-500 bg-red-50 text-red-700'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <span className="text-sm font-medium">{cat}</span>
-                  </button>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Property Type</label>
+              <select
+                value={formData.propertyTypeId}
+                onChange={(e) => setFormData({ ...formData, propertyTypeId: e.target.value })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-gray-900"
+                required
+              >
+                <option value="">Select property type</option>
+                {propertyTypes.map((type) => (
+                  <option key={type.id} value={type.id}>
+                    {type.typeName}
+                  </option>
                 ))}
-              </div>
+              </select>
             </div>
 
             {/* Title */}
@@ -224,15 +373,26 @@ export default function CreatePropertyPage() {
             </div>
 
             {/* Price */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className={`grid ${formData.type === 'Rent' ? 'grid-cols-3' : 'grid-cols-2'} gap-4`}>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Price</label>
                 <div className="relative">
                   <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <input
                     type="text"
-                    value={formData.price}
-                    onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                    inputMode="numeric"
+                    value={formData.price ? Number(formData.price).toLocaleString() : ''}
+                    onChange={(e) => {
+                      // Remove all non-digit characters
+                      const value = e.target.value.replace(/\D/g, '');
+                      setFormData({ ...formData, price: value });
+                    }}
+                    onKeyPress={(e) => {
+                      // Only allow digits
+                      if (!/[0-9]/.test(e.key)) {
+                        e.preventDefault();
+                      }
+                    }}
                     placeholder="850,000"
                     className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
                     required
@@ -240,35 +400,39 @@ export default function CreatePropertyPage() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {formData.type === 'Rent' ? 'Per' : 'Currency'}
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Currency</label>
                 <select
                   value={formData.priceUnit}
                   onChange={(e) => setFormData({ ...formData, priceUnit: e.target.value })}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
                 >
-                  {formData.type === 'Rent' ? (
-                    <>
-                      <option value="month">/month</option>
-                      <option value="week">/week</option>
-                      <option value="year">/year</option>
-                    </>
-                  ) : (
-                    <>
-                      <option value="USD">USD</option>
-                      <option value="VND">VND</option>
-                    </>
-                  )}
+                  <option value="USD">USD</option>
+                  <option value="VND">VND</option>
                 </select>
               </div>
+              {formData.type === 'Rent' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Period</label>
+                  <select
+                    value={formData.rentPeriod || 'month'}
+                    onChange={(e) => setFormData({ ...formData, rentPeriod: e.target.value })}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+                  >
+                    <option value="month">Month</option>
+                    <option value="week">Week</option>
+                    <option value="year">Year</option>
+                  </select>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end">
               <button
                 type="button"
                 onClick={nextStep}
-                className="px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors font-medium"
+                disabled={!formData.title || !formData.description || !formData.type || 
+                         !formData.propertyTypeId || !formData.price}
+                className="px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors font-medium disabled:bg-gray-300 disabled:cursor-not-allowed"
               >
                 Continue
               </button>
@@ -300,27 +464,57 @@ export default function CreatePropertyPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">City</label>
-                <input
-                  type="text"
-                  value={formData.city}
-                  onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+                <select
+                  value={formData.cityId}
+                  onChange={(e) => setFormData({ ...formData, cityId: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-gray-900"
                   required
-                />
+                  disabled={isLoadingLocations}
+                >
+                  <option value="">Select city</option>
+                  {Array.from(cities.entries()).map(([id, name]) => (
+                    <option key={id} value={id}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">District</label>
-                <input
-                  type="text"
-                  value={formData.district}
-                  onChange={(e) => setFormData({ ...formData, district: e.target.value })}
-                  placeholder="e.g. District 7"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+                <select
+                  value={formData.districtId}
+                  onChange={(e) => setFormData({ ...formData, districtId: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-gray-900"
                   required
-                />
+                  disabled={!formData.cityId || isLoadingLocations}
+                >
+                  <option value="">Select district</option>
+                  {Array.from(districts.entries()).map(([id, name]) => (
+                    <option key={id} value={id}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Ward</label>
+                <select
+                  value={formData.wardId}
+                  onChange={(e) => setFormData({ ...formData, wardId: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-gray-900"
+                  required
+                  disabled={!formData.districtId || isLoadingLocations}
+                >
+                  <option value="">Select ward</option>
+                  {Array.from(wards.entries()).map(([id, name]) => (
+                    <option key={id} value={id}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -378,6 +572,76 @@ export default function CreatePropertyPage() {
               </div>
             </div>
 
+            {/* Additional Details */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Rooms</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={formData.rooms || ''}
+                  onChange={(e) => setFormData({ ...formData, rooms: parseInt(e.target.value) || undefined })}
+                  placeholder="Total rooms"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Floors</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={formData.floors || ''}
+                  onChange={(e) => setFormData({ ...formData, floors: parseInt(e.target.value) || undefined })}
+                  placeholder="Number of floors"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">House Orientation</label>
+                <select
+                  value={formData.houseOrientation || ''}
+                  onChange={(e) => setFormData({ ...formData, houseOrientation: e.target.value || undefined })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-gray-900"
+                >
+                  <option value="">Select orientation</option>
+                  <option value="NORTH">North</option>
+                  <option value="SOUTH">South</option>
+                  <option value="EAST">East</option>
+                  <option value="WEST">West</option>
+                  <option value="NORTHEAST">Northeast</option>
+                  <option value="NORTHWEST">Northwest</option>
+                  <option value="NORTH_EAST">North East</option>
+                  <option value="NORTH_WEST">North West</option>
+                  <option value="SOUTHEAST">Southeast</option>
+                  <option value="SOUTHWEST">Southwest</option>
+                  <option value="SOUTH_EAST">South East</option>
+                  <option value="SOUTH_WEST">South West</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Balcony Orientation</label>
+                <select
+                  value={formData.balconyOrientation || ''}
+                  onChange={(e) => setFormData({ ...formData, balconyOrientation: e.target.value || undefined })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-gray-900"
+                >
+                  <option value="">Select orientation</option>
+                  <option value="NORTH">North</option>
+                  <option value="SOUTH">South</option>
+                  <option value="EAST">East</option>
+                  <option value="WEST">West</option>
+                  <option value="NORTHEAST">Northeast</option>
+                  <option value="NORTHWEST">Northwest</option>
+                  <option value="NORTH_EAST">North East</option>
+                  <option value="NORTH_WEST">North West</option>
+                  <option value="SOUTHEAST">Southeast</option>
+                  <option value="SOUTHWEST">Southwest</option>
+                  <option value="SOUTH_EAST">South East</option>
+                  <option value="SOUTH_WEST">South West</option>
+                </select>
+              </div>
+            </div>
+
             {/* Features */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-3">Features & Amenities</label>
@@ -423,7 +687,7 @@ export default function CreatePropertyPage() {
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
             <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
               <Camera className="w-5 h-5 text-red-600" />
-              Property Images
+              Images & Documents
             </h2>
 
             {/* Upload Area */}
@@ -474,6 +738,56 @@ export default function CreatePropertyPage() {
               </div>
             )}
 
+            {/* Documents Section */}
+            <div className="pt-6 border-t">
+              <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2 mb-4">
+                <FileText className="w-5 h-5 text-red-600" />
+                Property Documents
+              </h3>
+              
+              {/* Document Upload Area */}
+              <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-red-400 transition-colors">
+                <input
+                  type="file"
+                  accept=".pdf,.doc,.docx,.txt"
+                  multiple
+                  onChange={handleDocumentUpload}
+                  className="hidden"
+                  id="document-upload"
+                />
+                <label htmlFor="document-upload" className="cursor-pointer">
+                  <FileText className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+                  <p className="text-gray-700 font-medium">Upload documents</p>
+                  <p className="text-sm text-gray-500 mt-1">Contracts, certificates, blueprints, etc.</p>
+                  <p className="text-xs text-gray-400 mt-2">PDF, DOC, DOCX, TXT up to 10MB each</p>
+                </label>
+              </div>
+
+              {/* Document List */}
+              {documentNames.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-sm font-medium text-gray-700 mb-3">Uploaded Documents ({documentNames.length})</p>
+                  <div className="space-y-2">
+                    {documentNames.map((name, index) => (
+                      <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg group hover:bg-gray-100 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <FileText className="w-5 h-5 text-red-600" />
+                          <span className="text-sm text-gray-700 font-medium">{name}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeDocument(index)}
+                          className="w-6 h-6 bg-red-100 text-red-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-red-200"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="flex justify-between pt-4 border-t">
               <button
                 type="button"
@@ -484,10 +798,24 @@ export default function CreatePropertyPage() {
               </button>
               <button
                 type="submit"
-                className="px-8 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors font-medium flex items-center gap-2"
+                disabled={isSubmitting}
+                className={`px-8 py-3 rounded-xl transition-colors font-medium flex items-center gap-2 ${
+                  isSubmitting 
+                    ? 'bg-gray-400 cursor-not-allowed' 
+                    : 'bg-red-600 hover:bg-red-700'
+                } text-white`}
               >
-                <Check className="w-5 h-5" />
-                Create Property
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-5 h-5" />
+                    Create Property
+                  </>
+                )}
               </button>
             </div>
           </div>

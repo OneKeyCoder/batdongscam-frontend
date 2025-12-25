@@ -40,6 +40,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Decode JWT and extract user info
   const decodeToken = (token: string): User | null => {
@@ -59,6 +60,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Initialize auth state on mount
   useEffect(() => {
     const initAuth = async () => {
+      // Prevent multiple simultaneous refresh attempts
+      if (isRefreshing) return;
+      
       try {
         const accessToken = authService.getAccessToken();
         const refreshToken = authService.getRefreshToken();
@@ -86,28 +90,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch (profileError: any) {
           console.error('Failed to fetch profile on init:', profileError);
           
-          // If it's a 500 error (backend MongoDB issue), use token fallback
-          if (profileError?.response?.status === 500) {
-            console.warn('Backend error (500), using token fallback');
-            const decoded = decodeToken(accessToken);
-            if (decoded && storedRole) {
-              setUser({
-                ...decoded,
-                role: storedRole,
-              });
-              return; // Skip refresh attempt
-            }
-          }
-          
-          // Try to decode token as fallback for other errors
-          const decoded = decodeToken(accessToken);
-          if (decoded && storedRole) {
-            setUser({
-              ...decoded,
-              role: storedRole,
-            });
-          } else {
-            // Token invalid, try refresh
+          // If it's a 401 (unauthorized), try refresh
+          if (profileError?.response?.status === 401) {
+            setIsRefreshing(true);
             try {
               const newTokens = await authService.refresh(refreshToken);
               authService.setTokens(newTokens.accessToken, newTokens.refreshToken);
@@ -127,6 +112,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               console.error('Token refresh failed:', refreshError);
               authService.logout();
               localStorage.removeItem('userRole');
+              setUser(null);
+            } finally {
+              setIsRefreshing(false);
+            }
+          } else if (profileError?.response?.status === 500) {
+            // If it's a 500 error (backend issue), use token fallback
+            console.warn('Backend error (500), using token fallback');
+            const decoded = decodeToken(accessToken);
+            if (decoded && storedRole) {
+              setUser({
+                ...decoded,
+                role: storedRole,
+              });
+            }
+          } else {
+            // For other errors, try token fallback
+            const decoded = decodeToken(accessToken);
+            if (decoded && storedRole) {
+              setUser({
+                ...decoded,
+                role: storedRole,
+              });
+            } else {
+              // Invalid token, clear everything
+              authService.logout();
+              localStorage.removeItem('userRole');
+              setUser(null);
             }
           }
         }
@@ -135,13 +147,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Clear any invalid tokens
         authService.logout();
         localStorage.removeItem('userRole');
+        setUser(null);
       } finally {
         setIsLoading(false);
       }
     };
 
     initAuth();
-  }, []);
+  }, []); // Empty dependency array - only run once on mount
 
   const login = async (email: string, password: string) => {
     try {
