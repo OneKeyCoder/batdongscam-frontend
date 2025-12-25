@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Building, Plus, Search, Eye, Edit, Trash2, MapPin, Bed, Bath, Square, Grid, List, Loader2 } from 'lucide-react';
 import Badge from '@/app/components/ui/Badge';
 import Modal from '@/app/components/ui/Modal';
+import PropertyCard from '@/app/components/cards/PropertyCard';
 import Link from 'next/link';
 import { propertyService } from '@/lib/api/services/property.service';
 import { accountService } from '@/lib/api/services/account.service';
@@ -239,78 +240,24 @@ export default function MyPropertiesPage() {
 
       {/* Properties Grid/List */}
       {viewMode === 'grid' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredProperties.map((property) => (
-            <div 
+            <PropertyCard
               key={property.id}
-              className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-lg transition-all overflow-hidden group relative"
-            >
-              <Link href={`/property/${property.id}`} className="block">
-                {/* Image */}
-                <div className="relative h-56 overflow-hidden">
-                  <img 
-                    src={property.image} 
-                    alt={property.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                  <div className="absolute top-3 left-3 flex gap-2">
-                    <Badge variant={property.type === 'Sale' ? 'sale' : 'rental'}>
-                      {property.type}
-                    </Badge>
-                    <Badge variant={statusVariants[property.status]}>
-                      {property.status}
-                    </Badge>
-                  </div>
-                </div>
-
-                {/* Content */}
-                <div className="p-4">
-                  <h3 className="font-bold text-gray-900 truncate">{property.title}</h3>
-                  <p className="text-red-600 font-bold text-lg mt-1">{property.price}</p>
-                  <p className="text-sm text-gray-500 flex items-center gap-1 mt-2">
-                    <MapPin className="w-3 h-3" />
-                    {property.address}
-                  </p>
-
-                  {/* Features */}
-                  <div className="flex items-center gap-4 mt-3 pt-3 border-t border-gray-100 text-sm text-gray-600">
-                    <span className="flex items-center gap-1">
-                      <Square className="w-4 h-4 text-gray-400" />
-                      {property.area}
-                    </span>
-                  </div>
-                </div>
-              </Link>
-              
-              {/* Actions - Outside Link to prevent nested links */}
-              <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                <div className="flex items-center gap-1 bg-white rounded-lg p-1 shadow-lg">
-                  <Link
-                    href={`/property/${property.id}`}
-                    className="p-1.5 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <Eye className="w-4 h-4" />
-                  </Link>
-                  <Link
-                    href={`/my/properties/${property.id}/edit`}
-                    className="p-1.5 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <Edit className="w-4 h-4" />
-                  </Link>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(property);
-                    }}
-                    className="p-1.5 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            </div>
+              id={property.id}
+              image={property.image || 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=400'}
+              title={property.title}
+              price={property.price}
+              priceUnit={property.type === 'Rent' ? '/tháng' : ''}
+              address={property.address}
+              area={property.area}
+              type={property.type}
+              status={property.status === 'Active' ? 'Available' : property.status === 'Sold' ? 'Sold' : property.status === 'Rented' ? 'Rented' : 'Pending'}
+              variant="profile"
+              showFavorite={false}
+              showActions={true}
+              onDelete={() => handleDelete(property)}
+            />
           ))}
         </div>
       ) : (

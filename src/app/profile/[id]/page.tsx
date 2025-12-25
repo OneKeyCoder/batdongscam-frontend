@@ -117,22 +117,20 @@ export default function PublicProfilePage() {
   };
 
   const getStatsForRole = () => {
-    if (profile.role === 'PROPERTY_OWNER' && profile.statisticAll) {
+    if (profile.role === 'PROPERTY_OWNER' && profile.propertyProfile) {
       return {
-        totalListings: profile.statisticAll.totalPropertiesListed || 0,
-        solds: profile.statisticAll.totalPropertiesSold || 0,
-        rentals: profile.statisticAll.totalPropertiesRented || 0,
-        projects: 0
+        totalListings: profile.propertyProfile.totalListings || 0,
+        solds: profile.propertyProfile.totalSolds || 0,
+        rentals: profile.propertyProfile.totalRentals || 0,
       };
     } else if (profile.role === 'SALESAGENT' && profile.profile) {
       return {
         totalListings: profile.profile.totalAssignedProperties || 0,
         solds: profile.profile.totalSuccessfulDeals || 0,
         rentals: 0,
-        projects: 0
       };
     }
-    return { totalListings: 0, solds: 0, rentals: 0, projects: 0 };
+    return { totalListings: 0, solds: 0, rentals: 0 };
   };
 
   const stats = getStatsForRole();
@@ -212,33 +210,30 @@ export default function PublicProfilePage() {
               </div>
             </div>
 
-            {/* Stats - Vertical layout on the right */}
-            <div className="bg-red-700 rounded-xl p-6 min-w-[180px]">
-              <div className="flex flex-col gap-4">
-                <div className="text-center border-b border-red-600 pb-4">
-                  <div className="flex items-center justify-center gap-2 mb-1">
-                    <Building className="w-6 h-6 text-white" />
-                    <p className="text-4xl font-bold text-white">{stats.totalListings}</p>
+            {/* Stats - Vertical layout on the right (only for Property Owners) */}
+            {profile.role === 'PROPERTY_OWNER' && (
+              <div className="bg-red-700 rounded-xl p-6 min-w-[180px]">
+                <div className="flex flex-col gap-4">
+                  <div className="text-center border-b border-red-600 pb-4">
+                    <div className="flex items-center justify-center gap-2 mb-1">
+                      <Building className="w-6 h-6 text-white" />
+                      <p className="text-4xl font-bold text-white">{stats.totalListings}</p>
+                    </div>
+                    <p className="text-sm text-red-200">Total Listings</p>
                   </div>
-                  <p className="text-sm text-red-200">Total Listings</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Building className="w-5 h-5 text-white" />
-                  <span className="font-semibold text-white text-base">{stats.solds}</span>
-                  <span className="text-red-200 text-base">Solds</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Building className="w-5 h-5 text-white" />
-                  <span className="font-semibold text-white text-base">{stats.rentals}</span>
-                  <span className="text-red-200 text-base">Rentals</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Building className="w-5 h-5 text-white" />
-                  <span className="font-semibold text-white text-base">{stats.projects}</span>
-                  <span className="text-red-200 text-base">Projects</span>
+                  <div className="flex items-center gap-2">
+                    <Building className="w-5 h-5 text-white" />
+                    <span className="font-semibold text-white text-base">{stats.solds}</span>
+                    <span className="text-red-200 text-base">Solds</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Building className="w-5 h-5 text-white" />
+                    <span className="font-semibold text-white text-base">{stats.rentals}</span>
+                    <span className="text-red-200 text-base">Rentals</span>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Report User Button */}

@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Heart, Bed, Bath, Maximize, MapPin, Image } from 'lucide-react';
+import { Heart, Bed, Bath, Maximize, MapPin, Image, Eye, Edit, Trash2 } from 'lucide-react';
 import Badge from '@/app/components/ui/Badge';
 
 export interface PropertyCardProps {
@@ -22,6 +22,10 @@ export interface PropertyCardProps {
   onFavoriteToggle?: (id: number | string) => void;
   showFavorite?: boolean;
   variant?: 'default' | 'profile'; // New variant prop for different layouts
+  // Management actions (for /my/properties)
+  showActions?: boolean;
+  onEdit?: (id: number | string) => void;
+  onDelete?: (id: number | string) => void;
 }
 
 export default function PropertyCard({
@@ -41,6 +45,9 @@ export default function PropertyCard({
   onFavoriteToggle,
   showFavorite = true,
   variant = 'default',
+  showActions = false,
+  onEdit,
+  onDelete,
 }: PropertyCardProps) {
   return (
     <div className="group bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-lg transition-all duration-300 hover:-translate-y-1 relative">
@@ -137,8 +144,43 @@ export default function PropertyCard({
         </div>
       </Link>
 
-      {/* Favorite Button - Outside Link for proper event handling */}
-      {showFavorite && (
+      {/* Action Buttons - For management (hover to show) */}
+      {showActions && (
+        <div className="absolute top-1 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+          <div className="flex items-center gap-1.5 bg-white rounded-lg p-1.5 shadow-lg">
+            <Link
+              href={`/property/${id}`}
+              className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+              onClick={(e) => e.stopPropagation()}
+              title="View"
+            >
+              <Eye className="w-4 h-4" />
+            </Link>
+            <Link
+              href={`/my/properties/${id}/edit`}
+              className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
+              onClick={(e) => e.stopPropagation()}
+              title="Edit"
+            >
+              <Edit className="w-4 h-4" />
+            </Link>
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onDelete?.(id);
+              }}
+              className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+              title="Delete"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Favorite Button - Outside Link for proper event handling (only when not showing actions) */}
+      {showFavorite && !showActions && (
         <button
           onClick={(e) => {
             e.preventDefault();

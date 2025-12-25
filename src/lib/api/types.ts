@@ -156,6 +156,13 @@ export interface PropertyDetails {
   yearBuilt?: number;
   amenities?: string;
   propertyTypeName?: string;
+  wardId?: string;
+  wardName?: string;
+  districtId?: string;
+  districtName?: string;
+  cityId?: string;
+  cityName?: string;
+  isFavorite?: boolean;
   mediaList: Array<{
     id: string;
     filePath: string;
@@ -173,7 +180,7 @@ export interface PropertyDetails {
     firstName: string;
     lastName: string;
     phoneNumber: string;
-    email: string;
+    email?: string;
   };
   agent?: {
     id: string;
@@ -187,7 +194,7 @@ export interface PropertyDetails {
     lastName: string;
     phoneNumber: string;
   };
-  ward: {
+  ward?: {
     id: string;
     wardName: string;
     district: {
@@ -199,7 +206,7 @@ export interface PropertyDetails {
       };
     };
   };
-  propertyType: {
+  propertyType?: {
     id: string;
     typeName: string;
   };

@@ -3,13 +3,11 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Building, MapPin, Bed, Bath, Square, Heart, Share2, Phone, Mail, Calendar, ChevronLeft, ChevronRight, Star, User, Check, Clock, Shield, Menu, X, Loader2, AlertCircle, Edit, FileText, Trash2 } from 'lucide-react';
+import { Building, MapPin, Bed, Bath, Square, Heart, Share2, Phone, Mail, Calendar, ChevronLeft, ChevronRight, Star, User, Check, Clock, Shield, Menu, X, Loader2, AlertCircle, Edit, FileText, Trash2, Eye, Download } from 'lucide-react';
 import NavBar from '@/app/components/layout/NavBar';
 import Modal from '@/app/components/ui/Modal';
-import DocumentList from '@/app/components/features/properties/details/DocumentList';
 import Footer from '@/app/components/layout/Footer';
-import { propertyService } from '@/lib/api/services/property.service';
-import { PropertyDetails } from '@/lib/api/types';
+import { propertyService, PropertyDetails } from '@/lib/api/services/property.service';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function PropertyDetailPage() {
@@ -26,6 +24,7 @@ export default function PropertyDetailPage() {
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [previewDocument, setPreviewDocument] = useState<{url: string; name: string} | null>(null);
   const { user } = useAuth();
   
   // Booking form state
@@ -49,8 +48,7 @@ export default function PropertyDetailPage() {
       try {
         const data = await propertyService.getPropertyDetails(propertyId);
         setProperty(data);
-        // Set favorite status from API if available
-        // setIsFavorite(data.isFavorite || false);
+        setIsFavorite(data.isFavorite || false);
       } catch (err: any) {
         console.error('Failed to fetch property:', err);
         if (err.response?.status === 404) {
@@ -173,7 +171,13 @@ export default function PropertyDetailPage() {
           <div className="absolute top-4 right-4 flex gap-2">
             {/* Favorite - Always visible */}
             <button
-              onClick={() => setIsFavorite(!isFavorite)}
+              onClick={() => {
+                if (!user) {
+                  window.location.href = '/login';
+                  return;
+                }
+                setIsFavorite(!isFavorite);
+              }}
               className="w-10 h-10 bg-white rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors shadow-lg"
             >
               <Heart className={`w-5 h-5 ${isFavorite ? 'fill-red-500 text-red-500' : 'text-gray-600'}`} />
@@ -224,6 +228,10 @@ export default function PropertyDetailPage() {
                 <p className="text-gray-600 flex items-center gap-2 mt-2">
                   <MapPin className="w-5 h-5 text-gray-400" />
                   {property.fullAddress}
+                  {/* For some reason the fucking seed data itself has wardName in the fullAddress so we comment this */}
+                  {/* {(property as any).wardName && `, ${(property as any).wardName}`} */}
+                  {(property as any).districtName && `, ${(property as any).districtName}`}
+                  {(property as any).cityName && `, ${(property as any).cityName}`}
                 </p>
               </div>
 
@@ -322,24 +330,42 @@ export default function PropertyDetailPage() {
                   </h2>
                   <div className="space-y-3">
                     {property.documentList.map((doc) => (
-                      <a
+                      <div
                         key={doc.id}
-                        href={doc.filePath}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors group"
+                        className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
                       >
                         <div className="flex items-center gap-3">
                           <FileText className="w-5 h-5 text-red-600" />
                           <div>
-                            <p className="font-medium text-gray-900 group-hover:text-red-600">{doc.documentTypeName}</p>
+                            <p className="font-medium text-gray-900">{doc.documentTypeName}</p>
                             <p className="text-sm text-gray-500">{doc.documentName}</p>
                           </div>
                         </div>
-                        <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-700 rounded">
-                          {doc.verificationStatus}
-                        </span>
-                      </a>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-700 rounded mr-2">
+                            {doc.verificationStatus}
+                          </span>
+                          {/* Preview Button */}
+                          <button
+                            onClick={() => setPreviewDocument({ url: doc.filePath, name: doc.documentName || 'Document' })}
+                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 transition-colors"
+                            title="Preview document"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          {/* Download Button */}
+                          <a
+                            href={doc.filePath}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            download
+                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-green-50 hover:bg-green-100 text-green-600 transition-colors"
+                            title="Download document"
+                          >
+                            <Download className="w-4 h-4" />
+                          </a>
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -395,7 +421,13 @@ export default function PropertyDetailPage() {
 
                 <div className="space-y-3 mt-3">
                   <button
-                    onClick={() => setShowBookingModal(true)}
+                    onClick={() => {
+                      if (!user) {
+                        window.location.href = '/login';
+                        return;
+                      }
+                      setShowBookingModal(true);
+                    }}
                     className="w-full py-3 bg-red-600 text-white font-medium rounded-xl hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
                   >
                     <Calendar className="w-5 h-5" />
@@ -523,6 +555,52 @@ export default function PropertyDetailPage() {
           </button>
         </form>
       </Modal>
+
+      {/* Document Preview Modal */}
+      {previewDocument && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
+          onClick={() => setPreviewDocument(null)}
+        >
+          <div 
+            className="relative bg-white rounded-2xl w-[90%] h-[90%] max-w-6xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h3 className="text-lg font-bold text-gray-900 truncate pr-4">
+                {previewDocument.name}
+              </h3>
+              <div className="flex items-center gap-2">
+                <a
+                  href={previewDocument.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  download
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+                >
+                  <Download className="w-4 h-4" />
+                  Download
+                </a>
+                <button
+                  onClick={() => setPreviewDocument(null)}
+                  className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-600" />
+                </button>
+              </div>
+            </div>
+            {/* Document Viewer */}
+            <div className="h-[calc(100%-65px)]">
+              <iframe
+                src={previewDocument.url}
+                className="w-full h-full"
+                title={previewDocument.name}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <Footer />

@@ -48,6 +48,11 @@ export interface UserProfile {
   profile?: any;
   statisticMonth?: any;
   statisticAll?: any;
+  propertyProfile?: {
+    totalListings: number;
+    totalSolds: number;
+    totalRentals: number;
+  };
 }
 
 export interface SaleAgentListItem {

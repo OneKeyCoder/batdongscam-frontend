@@ -283,21 +283,7 @@ export default function PropertiesPage() {
 
         {/* Search & Filters */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-8">
-          {/* Search Bar */}
-          <div className="flex flex-col lg:flex-row gap-4 mb-6">
-            <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search by property name, location..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
-              />
-            </div>
-          </div>
-
-          {/* Type Tabs */}
+          {/* Type Tabs - Moved to top */}
           <div className="flex flex-wrap gap-2 mb-6">
             <button
               onClick={() => setPropertyType('all')}
@@ -325,8 +311,42 @@ export default function PropertiesPage() {
             </button>
           </div>
 
+          {/* Search Bar */}
+          <div className="flex flex-col lg:flex-row gap-4 mb-6">
+            <div className="relative flex-1">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search by property name, location..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+              />
+            </div>
+          </div>
+
           {/* Filter Row */}
           <div className="flex items-center gap-4 mb-4">
+            {/* Property Type Selector */}
+            <div className="w-50">
+              <div className="relative">
+                <select
+                  value={selectedPropertyTypeId}
+                  onChange={(e) => {
+                    setSelectedPropertyTypeId(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg text-gray-900 bg-white appearance-none cursor-pointer focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+                >
+                  <option value="">All Property Types</option>
+                  {propertyTypes.map((type) => (
+                    <option key={type.id} value={type.id}>{type.typeName}</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600 pointer-events-none" />
+              </div>
+            </div>
+
             {/* Location Selector */}
             <div className="flex-1">
               <LocationSelector
@@ -351,10 +371,10 @@ export default function PropertiesPage() {
             {/* Property Features Button */}
             <button
               onClick={() => setShowAdvancedSearch(true)}
-              className="flex items-center gap-2 px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap"
+              className="flex items-center gap-2 px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap text-gray-900 w-50"
             >
-              <Filter className="w-4 h-4 text-gray-900" />
-              <span className="text-sm font-medium text-gray-900">Property Features</span>
+              <Filter className="w-4 h-4" />
+              <span>Property Features</span>
               {advancedFilterCount > 0 && (
                 <span className="px-2 py-0.5 bg-red-600 text-white text-xs font-medium rounded-full">
                   {advancedFilterCount}
@@ -491,41 +511,72 @@ export default function PropertiesPage() {
               <button
                 onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                 disabled={currentPage === 1}
-                className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
               >
                 Previous
               </button>
               
-              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                let pageNum;
-                if (totalPages <= 5) {
-                  pageNum = i + 1;
-                } else if (currentPage <= 3) {
-                  pageNum = i + 1;
-                } else if (currentPage >= totalPages - 2) {
-                  pageNum = totalPages - 4 + i;
+              {(() => {
+                const pages: (number | string)[] = [];
+                
+                if (totalPages <= 9) {
+                  // Show all pages if total is 9 or less
+                  for (let i = 1; i <= totalPages; i++) {
+                    pages.push(i);
+                  }
                 } else {
-                  pageNum = currentPage - 2 + i;
+                  // Always show first 2 pages
+                  pages.push(1);
+                  pages.push(2);
+                  
+                  if (currentPage > 5) {
+                    pages.push('...');
+                  }
+                  
+                  // Show pages around current page (3 pages range)
+                  const start = Math.max(3, currentPage - 1);
+                  const end = Math.min(totalPages - 2, currentPage + 1);
+                  
+                  for (let i = start; i <= end; i++) {
+                    if (i > 2 && i < totalPages - 1) {
+                      pages.push(i);
+                    }
+                  }
+                  
+                  if (currentPage < totalPages - 4) {
+                    pages.push('...');
+                  }
+                  
+                  // Always show last 2 pages
+                  pages.push(totalPages - 1);
+                  pages.push(totalPages);
                 }
-                return (
-                  <button
-                    key={pageNum}
-                    onClick={() => setCurrentPage(pageNum)}
-                    className={`w-10 h-10 rounded-lg text-sm font-medium transition-colors ${
-                      currentPage === pageNum
-                        ? 'bg-red-600 text-white'
-                        : 'border border-gray-200 hover:bg-gray-50'
-                    }`}
-                  >
-                    {pageNum}
-                  </button>
-                );
-              })}
+                
+                return pages.map((page, index) => (
+                  page === '...' ? (
+                    <span key={`ellipsis-${index}`} className="w-10 h-10 flex items-center justify-center text-gray-500">
+                      ...
+                    </span>
+                  ) : (
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page as number)}
+                      className={`w-10 h-10 rounded-lg text-sm font-medium transition-colors ${
+                        currentPage === page
+                          ? 'bg-red-600 text-white'
+                          : 'border border-gray-300 text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  )
+                ));
+              })()}
               
               <button
                 onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                 disabled={currentPage === totalPages}
-                className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
               >
                 Next
               </button>
