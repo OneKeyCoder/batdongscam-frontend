@@ -1,33 +1,62 @@
-import React, { useState } from 'react';
+'use client';
+
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, ChevronRight, Eye } from 'lucide-react';
+import { Eye, Loader2 } from 'lucide-react';
 import Badge from '@/app/components/ui/Badge';
 import Pagination from '@/app/components/Pagination';
+import { accountService, CustomerListItem, CustomerFilters } from '@/lib/api/services/account.service';
 
-const customers = Array(10).fill(null).map((_, i) => ({
-  id: i + 1,
-  name: "Customer's Name",
-  code: "#1",
-  score: "95",
-  tier: "PLATINUM",
-  spending: "12.5M",
-  viewings: "15",
-  contracts: "20",
-  joinedAt: "January 2nd, 2022"
-}));
+interface Props {
+  filters: CustomerFilters;
+  onFilterChange: React.Dispatch<React.SetStateAction<CustomerFilters>>;
+}
 
-export default function CustomersTable() {
+export default function CustomersTable({ filters, onFilterChange }: Props) {
+  const [data, setData] = useState<CustomerListItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [totalItems, setTotalItems] = useState(0);
 
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
-
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentAgents = customers.slice(indexOfFirstItem, indexOfLastItem);
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const res = await accountService.getAllCustomers({
+          ...filters,
+          page: filters.page || 1,
+          limit: filters.limit || 10,
+          sortType: filters.sortType || 'desc',
+          sortBy: filters.sortBy || 'createdAt'
+        });
+        setData(res.data);
+        if (res.paging) setTotalItems(res.paging.total);
+        else if ((res as any).meta) setTotalItems((res as any).meta.total);
+      } catch (error) {
+        console.error("Error fetching customers:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [filters]);
 
   const handlePageChange = (pageNumber: number) => {
-    setCurrentPage(pageNumber);
+    onFilterChange(prev => ({ ...prev, page: pageNumber }));
   };
+
+  const formatDate = (dateStr: string) => new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const formatCurrency = (amount?: number) => amount === undefined ? '0' : new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+  const getTierVariant = (tier?: string) => {
+    switch (tier?.toUpperCase()) {
+      case 'PLATINUM': return 'pink';
+      case 'GOLD': return 'gold';
+      case 'SILVER': return 'sale';
+      case 'BRONZE': return 'pending';
+      default: return 'default';
+    }
+  };
+
+  if (loading) return <div className="bg-white border border-gray-200 rounded-xl p-12 flex justify-center"><Loader2 className="w-8 h-8 text-red-600 animate-spin" /></div>;
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
@@ -46,43 +75,46 @@ export default function CustomersTable() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {customers.map((item) => (
-              <tr key={item.id} className="hover:bg-gray-50 transition-colors">
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gray-200 rounded-lg shrink-0"></div>
-                    <div>
-                      <p className="font-bold text-gray-900 text-xs">{item.name}</p>
-                      <p className="text-[10px] text-red-600 font-bold mt-0.5">{item.code}</p>
+            {data.length === 0 ? (
+              <tr><td colSpan={8} className="text-center py-8">No customers found.</td></tr>
+            ) : (
+              data.map((item) => (
+                <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-gray-200 rounded-lg shrink-0 overflow-hidden">
+                        {item.avatarUrl ? <img src={item.avatarUrl} className="w-full h-full object-cover" alt="" /> :
+                          <div className="w-full h-full flex items-center justify-center bg-gray-100 font-bold text-gray-400">{item.firstName.charAt(0)}</div>}
+                      </div>
+                      <div>
+                        <p className="font-bold text-gray-900 text-xs">{item.firstName} {item.lastName}</p>
+                        <p className="text-[10px] text-red-600 font-bold mt-0.5">#{item.ranking || 'N/A'}</p>
+                      </div>
                     </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4 font-bold text-red-600">{item.score}</td>
-                <td className="px-6 py-4">
-                  <Badge variant={item.tier === 'PLATINUM' ? 'pink' : 'gold'}>{item.tier}</Badge>
-                </td>
-                <td className="px-6 py-4 font-bold text-red-600">{item.spending}</td>
-                <td className="px-6 py-4 font-bold text-red-600">{item.viewings}</td>
-                <td className="px-6 py-4 font-bold text-red-600">{item.contracts}</td>
-                <td className="px-6 py-4 text-gray-900">{item.joinedAt}</td>
-                <td className="px-6 py-4 text-right">
-                  <Link
-                    href={`/admin/customers/${item.id}`}
-                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg inline-flex items-center justify-center transition-colors"
-                  >
-                    <Eye className="w-5 h-5" />
-                  </Link>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="px-6 py-4 font-bold text-red-600">{item.point || 0}</td>
+                  <td className="px-6 py-4">
+                    <Badge variant={getTierVariant(item.tier) as any}>{item.tier || '---'}</Badge>
+                  </td>
+                  <td className="px-6 py-4 font-bold text-red-600">{formatCurrency(item.totalSpending)}</td>
+                  <td className="px-6 py-4 font-bold text-red-600">{item.totalViewings || 0}</td>
+                  <td className="px-6 py-4 font-bold text-red-600">{item.totalContracts || 0}</td>
+                  <td className="px-6 py-4 text-gray-900">{formatDate(item.createdAt)}</td>
+                  <td className="px-6 py-4 text-right">
+                    <Link href={`/admin/customers/${item.id}`} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg inline-flex items-center justify-center transition-colors">
+                      <Eye className="w-5 h-5" />
+                    </Link>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
-      {/* Pagination */}
       <Pagination
-        currentPage={currentPage}
-        totalItems={customers.length}
-        pageSize={itemsPerPage}
+        currentPage={filters.page || 1}
+        totalItems={totalItems}
+        pageSize={filters.limit || 10}
         onPageChange={handlePageChange}
       />
     </div>

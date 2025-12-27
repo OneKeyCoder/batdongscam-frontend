@@ -418,7 +418,23 @@ export const accountService = {
   async getAllSaleAgents(filters?: SaleAgentFilters): Promise<PaginatedResponse<SaleAgentListItem>> {
     const response = await apiClient.get<PaginatedResponse<SaleAgentListItem>>(
       ACCOUNT_ENDPOINTS.SALE_AGENTS,
-      { params: filters }
+      {
+        params: filters,
+        paramsSerializer: (params) => {
+          const searchParams = new URLSearchParams();
+          Object.keys(params).forEach(key => {
+            const value = params[key];
+            if (value === undefined || value === null || value === '') return;
+
+            if (Array.isArray(value)) {
+              value.forEach(val => searchParams.append(key, val));
+            } else {
+              searchParams.append(key, value);
+            }
+          });
+          return searchParams.toString();
+        }
+      }
     );
     return response.data;
   },

@@ -6,7 +6,7 @@ import AllTab from '@/app/components/features/admin/reports/property-owner/AllTa
 import MonthTab from '@/app/components/features/admin/reports/property-owner/MonthTab';
 
 export default function PropertyOwnerReportPage() {
-  const [activeTab, setActiveTab] = useState<'all' | 'month'>('month');
+  const [activeTab, setActiveTab] = useState<'all' | 'month'>('all');
 
   return (
     <div className="space-y-6">

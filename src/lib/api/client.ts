@@ -10,6 +10,10 @@ const apiClient: AxiosInstance = axios.create({
     'Content-Type': 'application/json',
   },
   timeout: 30000, // 30 seconds
+
+  paramsSerializer: {
+    indexes: null, // Remove brackets from array params
+  }
 });
 
 // Request interceptor - attach auth token
@@ -17,11 +21,11 @@ apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     // Get access token from localStorage
     const accessToken = localStorage.getItem('accessToken');
-    
+
     if (accessToken && config.headers) {
       config.headers.Authorization = `Bearer ${accessToken}`;
     }
-    
+
     return config;
   },
   (error) => {
@@ -43,7 +47,7 @@ apiClient.interceptors.response.use(
 
       try {
         const refreshToken = localStorage.getItem('refreshToken');
-        
+
         if (!refreshToken) {
           // No refresh token, redirect to login
           if (typeof window !== 'undefined') {
@@ -71,7 +75,7 @@ apiClient.interceptors.response.use(
         if (originalRequest.headers) {
           originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
         }
-        
+
         return apiClient(originalRequest);
       } catch (refreshError) {
         // Refresh failed, redirect to login

@@ -6,7 +6,7 @@ import AllTab from '@/app/components/features/admin/reports/agent-performance/Al
 import MonthTab from '@/app/components/features/admin/reports/agent-performance/MonthTab';
 
 export default function AgentPerformancePage() {
-  const [activeTab, setActiveTab] = useState<'all' | 'month'>('month');
+  const [activeTab, setActiveTab] = useState<'all' | 'month'>('all');
 
   return (
     <div className="space-y-6">
