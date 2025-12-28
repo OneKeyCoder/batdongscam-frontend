@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Building2, FileText, Wallet, Users, ThumbsUp, TrendingUp, TrendingDown,
-  Activity as ActivityIcon, Star, ChevronDown
+  Activity as ActivityIcon, Star, Loader2
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -23,6 +23,26 @@ import type {
 
 const COLORS = ['#EC4899', '#3B82F6', '#EAB308', '#EF4444', '#9CA3AF'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// --- [FIXED] HELPER FUNCTION: Format Currency Compact ---
+const formatCompactNumber = (number: number) => {
+  const isNegative = number < 0;
+  const absValue = Math.abs(number);
+
+  let formatted = absValue.toString();
+
+  if (absValue >= 1000000000) {
+    formatted = (absValue / 1000000000).toFixed(1).replace(/\.0$/, '') + 'B';
+  } else if (absValue >= 1000000) {
+    formatted = (absValue / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+  } else if (absValue >= 1000) {
+    formatted = (absValue / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+  } else {
+    formatted = absValue.toFixed(2).replace(/\.00$/, '');
+  }
+
+  return isNegative ? `-${formatted}` : formatted;
+};
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
@@ -60,7 +80,7 @@ export default function DashboardPage() {
           reportService.getDashboardPropertyDistribution(currentYear),
           reportService.getDashboardAgentRanking(currentMonth, currentYear),
           reportService.getDashboardCustomerRanking(currentMonth, currentYear),
-          // Recent Activities Sources
+
           paymentService.getPayments({ size: 5, sortDirection: 'DESC', sortBy: 'createdAt' }),
           violationService.getAdminViolations({ limit: 5, sortType: 'desc', sortBy: 'createdAt' }),
           accountService.getAllCustomers({ limit: 5, sortType: 'desc', sortBy: 'createdAt' })
@@ -68,7 +88,7 @@ export default function DashboardPage() {
 
         setTopStats(statsRes);
 
-        // 2. Revenue & Contracts Chart (Map Record<number, number> -> Array)
+        // Map Data for Charts
         const mappedRevenue = MONTHS.map((month, index) => ({
           name: month,
           revenue: revContRes.revenue?.[index + 1] || 0,
@@ -76,31 +96,28 @@ export default function DashboardPage() {
         }));
         setRevenueChartData(mappedRevenue);
 
-        // 3. Total Properties Chart
         const mappedProperties = MONTHS.map((month, index) => ({
           name: month,
           value: propsRes.totalProperties?.[index + 1] || 0,
         }));
         setPropertiesChartData(mappedProperties);
 
-        // 4. Distribution Chart
         const mappedDist = distRes.propertyTypes.map(item => ({
           name: item.typeName,
           value: item.count,
         }));
         setDistributionChartData(mappedDist);
 
-        // 5. Rankings
         setTopAgents(agentRankRes.agents);
         setTopCustomers(cusRankRes.customers);
 
-        // 6. Recent Activities
+        // Recent Activities
         const activities = [
           ...(paymentsRes.data || []).map((p: any) => ({
             id: `pay-${p.id}`,
             type: 'success',
             title: 'Payment Received',
-            desc: `${p.amount.toLocaleString()} VND from ${p.payerName || 'Unknown'}`,
+            desc: `${p.amount.toLocaleString()} VND`,
             time: p.createdAt,
             timestamp: new Date(p.createdAt).getTime()
           })),
@@ -108,7 +125,7 @@ export default function DashboardPage() {
             id: `vio-${v.id}`,
             type: 'warning',
             title: 'Violation Reported',
-            desc: `${v.violationType} reported by ${v.reporterName}`,
+            desc: `${v.violationType}`,
             time: v.createdAt,
             timestamp: new Date(v.createdAt).getTime()
           })),
@@ -137,12 +154,11 @@ export default function DashboardPage() {
   }, [currentYear, currentMonth]);
 
   if (loading) {
-    return <div className="p-10 text-center text-gray-500 animate-pulse">Loading dashboard data...</div>;
+    return <div className="flex justify-center items-center h-screen"><Loader2 className="w-10 h-10 text-red-600 animate-spin" /></div>;
   }
 
-  // --- RENDER UI ---
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-6 animate-in fade-in duration-500 pb-10">
 
       {/* HEADER */}
       <div>
@@ -162,11 +178,15 @@ export default function DashboardPage() {
           value={topStats?.totalContracts ?? 0}
           trend="+8.2%" isPositive={true} icon={FileText}
         />
+
         <StatCard
           title="Monthly Revenue"
-          value={`${(topStats?.monthRevenue || 0).toLocaleString()} ₫`}
-          trend="-2.1%" isPositive={false} icon={Wallet}
+          value={formatCompactNumber(topStats?.monthRevenue || 0)} // VD: -79.9B
+          trend="-2.1%"
+          isPositive={false}
+          icon={Wallet}
         />
+
         <StatCard
           title="Total Users"
           value={topStats?.totalUsers ?? 0}
@@ -174,7 +194,7 @@ export default function DashboardPage() {
         />
         <StatCard
           title="Satisfaction"
-          value={`${topStats?.customerStatisfaction ?? 0}`}
+          value={`${formatCompactNumber(topStats?.customerStatisfaction || 0)}`}
           trend="+1.2%" isPositive={true} icon={ThumbsUp}
         />
       </div>
@@ -188,9 +208,9 @@ export default function DashboardPage() {
           </div>
           <span className="text-xs font-bold text-gray-500 border px-2 py-1 rounded">{currentYear}</span>
         </div>
-        <div className="w-full h-64">
+        <div className="w-full h-72">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={revenueChartData}>
+            <AreaChart data={revenueChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#DC2626" stopOpacity={0.1} />
@@ -198,10 +218,34 @@ export default function DashboardPage() {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
-              <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
-              <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
-              <Tooltip />
+              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} dy={10} />
+
+              <YAxis
+                yAxisId="left"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fontSize: 12, fill: '#6B7280' }}
+                tickFormatter={formatCompactNumber}
+                width={80}
+              />
+
+              <YAxis
+                yAxisId="right"
+                orientation="right"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fontSize: 12, fill: '#6B7280' }}
+                width={40}
+              />
+
+              <Tooltip
+                formatter={(value: any, name: any) => [
+                  name === 'Revenue' ? `${Number(value).toLocaleString()} ₫` : value,
+                  name
+                ]}
+                contentStyle={{ borderRadius: '8px', border: '1px solid #E5E7EB' }}
+              />
+              <Legend verticalAlign="top" align="right" height={36} />
               <Area yAxisId="left" type="monotone" dataKey="revenue" stroke="#DC2626" strokeWidth={2} fillOpacity={1} fill="url(#colorRev)" name="Revenue" />
               <Area yAxisId="right" type="monotone" dataKey="contracts" stroke="#3B82F6" strokeWidth={2} fillOpacity={0} strokeDasharray="5 5" name="Contracts" />
             </AreaChart>
@@ -209,9 +253,8 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* MIDDLE ROW: Properties Chart & Distribution */}
+      {/* MIDDLE ROW */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
         {/* Total Properties Chart */}
         <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
           <div className="flex items-center justify-between mb-4">
@@ -223,11 +266,12 @@ export default function DashboardPage() {
           </div>
           <div className="w-full h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={propertiesChartData}>
+              <BarChart data={propertiesChartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} dy={10} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} />
                 <Tooltip cursor={{ fill: '#F3F4F6' }} contentStyle={{ borderRadius: '8px' }} />
-                <Bar dataKey="value" fill="#DC2626" radius={[4, 4, 0, 0]} barSize={40} name="Properties" />
+                <Bar dataKey="value" fill="#DC2626" radius={[4, 4, 0, 0]} barSize={32} name="Properties" />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -243,25 +287,27 @@ export default function DashboardPage() {
             <span className="text-xs font-bold text-gray-500 border px-2 py-1 rounded">{currentYear}</span>
           </div>
           <div className="w-full h-64 flex items-center justify-center">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={distributionChartData} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
-                  {distributionChartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend verticalAlign="bottom" height={36} iconType="circle" />
-              </PieChart>
-            </ResponsiveContainer>
+            {distributionChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={distributionChartData} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                    {distributionChartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-sm text-gray-400">No property data available.</p>
+            )}
           </div>
         </div>
       </div>
 
       {/* BOTTOM ROW: Rankings */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-        {/* Top Agents */}
         <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
           <div className="flex items-center justify-between mb-6">
             <h3 className="font-semibold text-gray-800 text-sm flex items-center gap-2">
@@ -284,7 +330,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Top Customers */}
         <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
           <div className="flex items-center justify-between mb-6">
             <h3 className="font-semibold text-gray-800 text-sm flex items-center gap-2">

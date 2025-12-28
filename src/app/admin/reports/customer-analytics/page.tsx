@@ -6,7 +6,7 @@ import AllTab from '@/app/components/features/admin/reports/customer/AllTab';
 import MonthTab from '@/app/components/features/admin/reports/customer/MonthTab';
 
 export default function CustomerAnalyticsReportPage() {
-  const [activeTab, setActiveTab] = useState<'all' | 'month'>('month');
+  const [activeTab, setActiveTab] = useState<'all' | 'month'>('all');
 
   return (
     <div className="space-y-6">

@@ -94,8 +94,8 @@ export interface PaymentFilters {
   size?: number;
   sortBy?: string;
   sortDirection?: 'ASC' | 'DESC';
-  paymentTypes?: string[];
-  statuses?: string[];
+  paymentTypes?: string | string[];
+  statuses?: string | string[];
   payerId?: string;
   payeeId?: string;
   contractId?: string;
@@ -139,10 +139,36 @@ export const paymentService = {
    * Get paginated list of payments with filters (Admin/Accountant only)
    */
   async getPayments(filters?: PaymentFilters): Promise<PaginatedResponse<PaymentListItem>> {
+    console.log('📤 Original filters:', filters);
+
+    // Build query string manually to ensure Spring Boot compatibility
+    const params = new URLSearchParams();
+
+    if (filters) {
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          if (Array.isArray(value)) {
+            // Add multiple params with same key: ?statuses=PENDING&statuses=SUCCESS
+            value.forEach(item => {
+              // Ensure enum values are uppercase
+              const paramValue = typeof item === 'string' ? item.toUpperCase() : item.toString();
+              params.append(key, paramValue);
+            });
+          } else {
+            params.append(key, value.toString());
+          }
+        }
+      });
+    }
+
+    const queryString = params.toString();
+    console.log('📡 Query string:', queryString);
+
     const response = await apiClient.get<PaginatedResponse<PaymentListItem>>(
-      PAYMENT_ENDPOINTS.PAYMENTS,
-      { params: filters }
+      `${PAYMENT_ENDPOINTS.PAYMENTS}?${queryString}`
     );
+
+    console.log('📥 Response:', response.data.data?.length, 'items');
     return response.data;
   },
 

@@ -3,8 +3,8 @@ import React from 'react';
 type BadgeVariant =
   | 'default' | 'success' | 'danger' | 'warning' | 'info' | 'pink' | 'yellow' | 'gold'
   | 'deposit' | 'advance' | 'installment' | 'fullpay' | 'salary' | 'bonus'
-  | 'monthly' | 'penalty' | 'refund' | 'sale' | 'rental' | 'pending' | 'failed' 
-  | 'scam' | 'spam' | 'reported' | 'resolved' | 'red' | 'blue';
+  | 'monthly' | 'penalty' | 'refund' | 'sale' | 'rental' | 'pending' | 'failed'
+  | 'scam' | 'spam' | 'reported' | 'resolved' | 'red' | 'blue' | 'gray';
 
 interface BadgeProps {
   children: React.ReactNode;
@@ -15,15 +15,16 @@ interface BadgeProps {
 export default function Badge({ children, variant = 'default', className = '' }: BadgeProps) {
   const variantStyles: Record<BadgeVariant, string> = {
     default: 'bg-gray-100 text-gray-800 border border-gray-200',
-    success: 'bg-green-100 text-green-700 border border-green-200', // Success
-    danger: 'bg-green-100 text-green-700 border border-green-200', // For Sale - Light green
+    success: 'bg-green-100 text-green-700 border border-green-200',
+    danger: 'bg-green-100 text-green-700 border border-green-200',
     warning: 'bg-yellow-100 text-yellow-800 border border-yellow-200',
-    info: 'bg-blue-100 text-blue-700 border border-blue-200', // For Rent - Light blue
-    pink: 'bg-pink-100 text-pink-600 border border-pink-200', // Platinum
+    info: 'bg-blue-100 text-blue-700 border border-blue-200',
+    pink: 'bg-pink-100 text-pink-600 border border-pink-200',
     yellow: "bg-yellow-100 text-yellow-600",
-    gold: 'bg-yellow-50 text-yellow-600 border border-yellow-200', // Gold
+    gold: 'bg-yellow-50 text-yellow-600 border border-yellow-200',
     red: "bg-red-100 text-red-600",
     blue: "bg-blue-100 text-blue-600",
+    gray: 'bg-gray-100 text-gray-800 border border-gray-200', 
 
     // --- PAYMENT VARIANTS ---
     deposit: 'bg-blue-100 text-blue-700 border-blue-200',
@@ -41,10 +42,10 @@ export default function Badge({ children, variant = 'default', className = '' }:
     failed: 'bg-red-200 text-red-800 border-red-300',
 
     // --- NEW VIOLATION STYLES ---
-    scam: 'bg-red-800 text-white border-red-900', 
-    spam: 'bg-amber-600 text-white border-amber-700', 
+    scam: 'bg-red-800 text-white border-red-900',
+    spam: 'bg-amber-600 text-white border-amber-700',
     reported: 'bg-red-50 text-red-600 border-red-100',
-    resolved: 'bg-green-50 text-green-600 border-green-100', 
+    resolved: 'bg-green-50 text-green-600 border-green-100',
   };
 
   return (
