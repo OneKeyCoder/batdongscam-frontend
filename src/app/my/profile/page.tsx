@@ -167,18 +167,13 @@ export default function CustomerProfilePage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Building className="w-5 h-5 text-white" />
-                  <span className="font-semibold text-white text-base">{user.profile?.totalSolds || 0}</span>
+                  <span className="font-semibold text-white text-base">{user.profile?.totalBought || 0}</span>
                   <span className="text-red-200 text-base">Bought</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Building className="w-5 h-5 text-white" />
-                  <span className="font-semibold text-white text-base">{user.profile?.totalRentals || 0}</span>
+                  <span className="font-semibold text-white text-base">{user.profile?.totalRented || 0}</span>
                   <span className="text-red-200 text-base">Rented</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Building className="w-5 h-5 text-white" />
-                  <span className="font-semibold text-white text-base">{user.profile?.totalProjects || 0}</span>
-                  <span className="text-red-200 text-base">Invested</span>
                 </div>
               </div>
             </div>

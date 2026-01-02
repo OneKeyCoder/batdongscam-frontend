@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, Clock, MapPin, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, MapPin, ChevronLeft, ChevronRight, Star, X, Loader2 } from 'lucide-react';
 import Badge from '@/app/components/ui/Badge';
 import Modal from '@/app/components/ui/Modal';
-import { appointmentService, ViewingCard, ViewingDetails } from '@/lib/api/services/appointment.service';
+import { appointmentService, ViewingCard, ViewingDetailsCustomer, RateAppointmentRequest } from '@/lib/api/services/appointment.service';
 import Skeleton from '@/app/components/ui/Skeleton';
 
 type ViewingStatus = 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
@@ -20,6 +20,22 @@ interface Viewing {
   agentName: string;
   price?: string;
   area?: string;
+  // Rating info from viewing details
+  rating?: number;
+  comment?: string;
+  // Full details for modal
+  fullAddress?: string;
+  description?: string;
+  customerRequirements?: string;
+  salesAgent?: {
+    id: string;
+    firstName?: string;
+    lastName?: string;
+    tier?: string;
+    rating?: number;
+    totalRates?: number;
+    phoneNumber?: string;
+  };
 }
 
 const statusVariants: Record<ViewingStatus, 'warning' | 'info' | 'success' | 'danger'> = {
@@ -31,24 +47,39 @@ const statusVariants: Record<ViewingStatus, 'warning' | 'info' | 'success' | 'da
 
 const statusLabels: Record<ViewingStatus, string> = {
   PENDING: 'Pending',
-  CONFIRMED: 'Assigned',
-  COMPLETED: 'Done',
+  CONFIRMED: 'Confirmed',
+  COMPLETED: 'Completed',
   CANCELLED: 'Cancelled',
 };
 
 export default function ViewingsPage() {
   const [viewings, setViewings] = useState<Viewing[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedViewingDetails, setSelectedViewingDetails] = useState<ViewingDetails | null>(null);
-  const [filter, setFilter] = useState<'All' | 'Pending' | 'Assigned' | 'Done' | 'Cancelled'>('All');
+  const [selectedViewingDetails, setSelectedViewingDetails] = useState<ViewingDetailsCustomer | null>(null);
+  const [filter, setFilter] = useState<'All' | 'Pending' | 'Confirmed' | 'Completed' | 'Cancelled'>('All');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [hoveredDate, setHoveredDate] = useState<number | null>(null);
   const [showDateViewings, setShowDateViewings] = useState<{date: number, viewings: Viewing[]} | null>(null);
+  
+  // Cancel modal state
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
+  
+  // Rate modal state
+  const [showRateModal, setShowRateModal] = useState(false);
+  const [ratingId, setRatingId] = useState<string | null>(null);
+  const [rating, setRating] = useState(5);
+  const [ratingComment, setRatingComment] = useState('');
+  const [isRating, setIsRating] = useState(false);
+  
+  // Total viewings count
+  const [totalViewings, setTotalViewings] = useState(0);
 
   const getImageUrl = (path?: string) => {
     if (!path) {
-      // Random placeholder for empty paths
       const placeholders = [
         'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=400',
         'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=400',
@@ -59,13 +90,10 @@ export default function ViewingsPage() {
       return placeholders[Math.floor(Math.random() * placeholders.length)];
     }
     
-    // If it's already a full URL, return it
     if (path.startsWith('http://') || path.startsWith('https://')) {
       return path;
     }
     
-    // For relative paths (like /uploads/...), fallback to placeholder
-    // since backend images are not accessible
     const placeholders = [
       'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=400',
       'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=400',
@@ -73,7 +101,6 @@ export default function ViewingsPage() {
       'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=400',
       'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=400',
     ];
-    // Use path hash to get consistent image for same property
     const hash = path.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
     return placeholders[hash % placeholders.length];
   };
@@ -85,14 +112,12 @@ export default function ViewingsPage() {
   const loadViewings = async () => {
     setIsLoading(true);
     try {
-      const data = await appointmentService.getViewingCards();
-      console.log('Raw API response:', data);
-      console.log('First viewing:', data[0]);
+      // Fetch all viewing cards - no need to fetch details for each
+      // Backend now returns rating, comment, and agentName in viewing cards
+      const response = await appointmentService.getViewingCards({ limit: 100 });
+      const cardsData = response.data || [];
       
-      const mappedData: Viewing[] = data.map(v => {
-        console.log('Mapping viewing:', v);
-        
-        // Format date and time from requestedDate
+      const mappedData: Viewing[] = cardsData.map((v: ViewingCard) => {
         const requestedDate = new Date(v.requestedDate);
         const formattedDate = requestedDate.toLocaleDateString('en-US', { 
           year: 'numeric', 
@@ -104,7 +129,6 @@ export default function ViewingsPage() {
           minute: '2-digit' 
         });
         
-        // Build address from district and city
         const address = [v.districtName, v.cityName].filter(Boolean).join(', ') || 'Address not available';
         
         return {
@@ -115,13 +139,21 @@ export default function ViewingsPage() {
           scheduledDate: formattedDate,
           scheduledTime: formattedTime,
           status: v.status,
-          agentName: 'TBA', // Not provided by backend
-          price: v.priceAmount ? `$${v.priceAmount.toLocaleString()}` : undefined,
+          agentName: v.agentName || 'TBA',
+          price: v.priceAmount ? `${v.priceAmount.toLocaleString('vi-VN')} VND` : undefined,
           area: v.area ? `${v.area} m²` : undefined,
+          // Rating info now comes from viewing card API
+          rating: v.rating,
+          comment: v.comment,
         };
       });
-      console.log('Mapped viewings:', mappedData);
       setViewings(mappedData);
+      // Store total count from API if available
+      if (response.paging?.total) {
+        setTotalViewings(response.paging.total);
+      } else {
+        setTotalViewings(mappedData.length);
+      }
     } catch (error) {
       console.error('Failed to load viewings:', error);
     } finally {
@@ -129,12 +161,53 @@ export default function ViewingsPage() {
     }
   };
 
-  const handleCancelViewing = async (id: string) => {
+  const openCancelModal = (id: string) => {
+    setCancellingId(id);
+    setCancelReason('');
+    setShowCancelModal(true);
+  };
+
+  const handleCancelViewing = async () => {
+    if (!cancellingId) return;
+    
+    setIsCancelling(true);
     try {
-      await appointmentService.cancelAppointment(id);
+      await appointmentService.cancelAppointment(cancellingId, cancelReason || undefined);
       await loadViewings();
+      setShowCancelModal(false);
+      setCancellingId(null);
     } catch (error) {
       console.error('Failed to cancel viewing:', error);
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  const openRateModal = (id: string, existingRating?: number, existingComment?: string) => {
+    setRatingId(id);
+    setRating(existingRating || 5);
+    setRatingComment(existingComment || '');
+    setShowRateModal(true);
+  };
+
+  const handleRateAppointment = async () => {
+    if (!ratingId) return;
+    
+    setIsRating(true);
+    try {
+      await appointmentService.rateAppointment(ratingId, { rating, comment: ratingComment || undefined });
+      await loadViewings();
+      setShowRateModal(false);
+      setRatingId(null);
+      // Refresh details if open
+      if (selectedViewingDetails && selectedViewingDetails.id === ratingId) {
+        const details = await appointmentService.getViewingDetails(ratingId);
+        setSelectedViewingDetails(details);
+      }
+    } catch (error) {
+      console.error('Failed to rate appointment:', error);
+    } finally {
+      setIsRating(false);
     }
   };
 
@@ -142,7 +215,6 @@ export default function ViewingsPage() {
     const clickedDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
     setSelectedDate(clickedDate);
     
-    // Filter viewings for this date
     const dateViewings = viewings.filter(v => {
       const viewingDate = new Date(v.scheduledDate);
       return viewingDate.getDate() === day &&
@@ -150,11 +222,9 @@ export default function ViewingsPage() {
         viewingDate.getFullYear() === currentDate.getFullYear();
     });
     
-    // If there's only one viewing, open it directly
     if (dateViewings.length === 1) {
       handleViewDetails(dateViewings[0].id);
     } else if (dateViewings.length > 1) {
-      // Show list to choose from
       setShowDateViewings({ date: day, viewings: dateViewings });
     }
   };
@@ -180,8 +250,8 @@ export default function ViewingsPage() {
   const filteredViewings = viewings.filter(v => {
     if (filter === 'All') return true;
     if (filter === 'Pending') return v.status === 'PENDING';
-    if (filter === 'Assigned') return v.status === 'CONFIRMED';
-    if (filter === 'Done') return v.status === 'COMPLETED';
+    if (filter === 'Confirmed') return v.status === 'CONFIRMED';
+    if (filter === 'Completed') return v.status === 'COMPLETED';
     if (filter === 'Cancelled') return v.status === 'CANCELLED';
     return true;
   });
@@ -204,7 +274,6 @@ export default function ViewingsPage() {
 
   const { daysInMonth, startingDayOfWeek } = getDaysInMonth(currentDate);
   
-  // Get dates that have viewings
   const viewingDates = viewings.map(v => {
     const date = new Date(v.scheduledDate);
     return {
@@ -249,13 +318,13 @@ export default function ViewingsPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <CalendarIcon className="w-6 h-6 text-red-600" />
-            Viewing Requests ({viewings.length})
+            Viewing Requests ({totalViewings})
           </h1>
         </div>
 
         {/* Filter Tabs */}
         <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
-          {(['All', 'Pending', 'Assigned', 'Done', 'Cancelled'] as const).map((tab) => (
+          {(['All', 'Pending', 'Confirmed', 'Completed', 'Cancelled'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setFilter(tab)}
@@ -351,10 +420,6 @@ export default function ViewingsPage() {
                             </div>
                           ))}
                         </div>
-                        {/* Arrow */}
-                        <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-px">
-                          <div className="w-2 h-2 bg-white border-r border-b border-gray-200 transform rotate-45"></div>
-                        </div>
                       </div>
                     )}
                   </div>
@@ -375,6 +440,11 @@ export default function ViewingsPage() {
                   <p className="text-xs text-gray-500 mt-1">
                     {viewing.scheduledDate} at {viewing.scheduledTime}
                   </p>
+                  {viewing.agentName && viewing.agentName !== 'TBA' && (
+                    <p className="text-xs text-gray-600 mt-1">
+                      Agent: <span className="font-medium">{viewing.agentName}</span>
+                    </p>
+                  )}
                   <Badge variant={statusVariants[viewing.status]} className="mt-2">
                     {statusLabels[viewing.status]}
                   </Badge>
@@ -407,16 +477,26 @@ export default function ViewingsPage() {
                 {/* Content */}
                 <div className="flex-1">
                   <div className="flex items-start justify-between mb-2">
-                    <div>
+                    <div className="flex-1">
                       <h3 className="font-bold text-gray-900">{viewing.propertyTitle}</h3>
                       <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
                         <MapPin className="w-3 h-3" />
                         {viewing.propertyAddress}
                       </p>
                     </div>
-                    <Badge variant={statusVariants[viewing.status]}>
-                      {statusLabels[viewing.status]}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      {/* Rating indicator - shown next to status for completed viewings */}
+                      {viewing.status === 'COMPLETED' && viewing.rating && (
+                        <div className="flex items-center gap-1 px-2.5 py-1 bg-gradient-to-r from-yellow-50 to-amber-50 rounded border border-yellow-300">
+                          <Star className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />
+                          <span className="text-xs font-bold text-yellow-700">{viewing.rating}/5</span>
+                          <span className="text-xs text-yellow-600 font-semibold">Rated</span>
+                        </div>
+                      )}
+                      <Badge variant={statusVariants[viewing.status]} className="text-xs px-3 py-1">
+                        {statusLabels[viewing.status]}
+                      </Badge>
+                    </div>
                   </div>
 
                   {/* Schedule */}
@@ -429,26 +509,41 @@ export default function ViewingsPage() {
                       <Clock className="w-4 h-4 text-red-500" />
                       {viewing.scheduledTime}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-gray-400">Agent:</span>
-                      {viewing.agentName}
-                    </div>
+                    {viewing.agentName && viewing.agentName !== 'TBA' && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-400">•</span>
+                        <span className="font-medium text-gray-700">Agent: {viewing.agentName}</span>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Actions */}
+                  {/* Actions - Clean and clear */}
                   <div className="flex items-center gap-2 mt-4">
                     <button
                       onClick={() => handleViewDetails(viewing.id)}
                       className="px-4 py-2 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
                     >
-                      Detail
+                      View Details
                     </button>
+                    {viewing.status === 'COMPLETED' && (
+                      <button 
+                        onClick={() => openRateModal(viewing.id, viewing.rating, viewing.comment)}
+                        className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
+                          viewing.rating 
+                            ? 'text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200' 
+                            : 'text-yellow-700 bg-yellow-50 hover:bg-yellow-100 border border-yellow-200'
+                        }`}
+                      >
+                        <Star className={`w-3.5 h-3.5 ${viewing.rating ? 'text-amber-500' : 'fill-yellow-400 text-yellow-400'}`} />
+                        {viewing.rating ? 'Edit Rating' : 'Rate Experience'}
+                      </button>
+                    )}
                     {(viewing.status === 'PENDING' || viewing.status === 'CONFIRMED') && (
                       <button 
-                        onClick={() => handleCancelViewing(viewing.id)}
+                        onClick={() => openCancelModal(viewing.id)}
                         className="px-4 py-2 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
                       >
-                        Cancel
+                        Cancel Viewing
                       </button>
                     )}
                   </div>
@@ -466,6 +561,114 @@ export default function ViewingsPage() {
           )}
         </div>
       </div>
+
+      {/* Cancel Confirmation Modal */}
+      <Modal
+        isOpen={showCancelModal}
+        onClose={() => setShowCancelModal(false)}
+        title="Cancel Viewing"
+      >
+        <div className="space-y-4">
+          <p className="text-gray-600">Are you sure you want to cancel this viewing appointment?</p>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Reason for cancellation (optional)
+            </label>
+            <textarea
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              placeholder="Please provide a reason..."
+              className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+              rows={3}
+            />
+          </div>
+          
+          <div className="flex gap-3 pt-4">
+            <button
+              onClick={() => setShowCancelModal(false)}
+              className="flex-1 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+            >
+              Keep Appointment
+            </button>
+            <button
+              onClick={handleCancelViewing}
+              disabled={isCancelling}
+              className="flex-1 py-2.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {isCancelling && <Loader2 className="w-4 h-4 animate-spin" />}
+              Cancel Viewing
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Rate Modal */}
+      <Modal
+        isOpen={showRateModal}
+        onClose={() => setShowRateModal(false)}
+        title="Rate Your Experience"
+      >
+        <div className="space-y-4">
+          <p className="text-gray-600">How was your viewing experience?</p>
+          
+          {/* Star Rating */}
+          <div className="flex items-center justify-center gap-2 py-4">
+            {[1, 2, 3, 4, 5].map((star) => (
+              <button
+                key={star}
+                onClick={() => setRating(star)}
+                className="p-1 transition-transform hover:scale-110"
+              >
+                <Star 
+                  className={`w-8 h-8 ${
+                    star <= rating 
+                      ? 'fill-yellow-400 text-yellow-400' 
+                      : 'text-gray-300'
+                  }`} 
+                />
+              </button>
+            ))}
+          </div>
+          <p className="text-center text-sm text-gray-500">
+            {rating === 1 && 'Poor'}
+            {rating === 2 && 'Fair'}
+            {rating === 3 && 'Good'}
+            {rating === 4 && 'Very Good'}
+            {rating === 5 && 'Excellent'}
+          </p>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Comment (optional)
+            </label>
+            <textarea
+              value={ratingComment}
+              onChange={(e) => setRatingComment(e.target.value)}
+              placeholder="Share your feedback..."
+              className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+              rows={3}
+            />
+          </div>
+          
+          <div className="flex gap-3 pt-4">
+            <button
+              onClick={() => setShowRateModal(false)}
+              className="flex-1 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleRateAppointment}
+              disabled={isRating}
+              className="flex-1 py-2.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {isRating && <Loader2 className="w-4 h-4 animate-spin" />}
+              Submit Rating
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Details Modal */}
       {selectedViewingDetails && (
@@ -495,7 +698,7 @@ export default function ViewingsPage() {
                   </Badge>
                   {selectedViewingDetails.priceAmount && (
                     <span className="text-lg font-bold text-red-600">
-                      ${selectedViewingDetails.priceAmount.toLocaleString()}
+                      {selectedViewingDetails.priceAmount.toLocaleString('vi-VN')} VND
                     </span>
                   )}
                   {selectedViewingDetails.area && (
@@ -504,6 +707,28 @@ export default function ViewingsPage() {
                 </div>
               </div>
             </div>
+
+            {/* Rating Display */}
+            {selectedViewingDetails.rating && (
+              <div className="flex items-center gap-2 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                <span className="text-sm font-medium text-gray-700">Your Rating:</span>
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <Star 
+                      key={star}
+                      className={`w-5 h-5 ${
+                        star <= selectedViewingDetails.rating! 
+                          ? 'fill-yellow-400 text-yellow-400' 
+                          : 'text-gray-300'
+                      }`} 
+                    />
+                  ))}
+                </div>
+                {selectedViewingDetails.comment && (
+                  <span className="text-sm text-gray-600 ml-2">"{selectedViewingDetails.comment}"</span>
+                )}
+              </div>
+            )}
 
             {/* Schedule Info */}
             <div className="grid grid-cols-2 gap-4">
@@ -535,57 +760,6 @@ export default function ViewingsPage() {
               </div>
             )}
 
-            {/* Property Features */}
-            <div>
-              <h4 className="text-sm font-semibold text-gray-900 mb-3">Property Features</h4>
-              <div className="grid grid-cols-2 gap-3">
-                {selectedViewingDetails.rooms && (
-                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <span className="text-blue-600 text-xs font-bold">R</span>
-                      </div>
-                      <p className="text-xs text-gray-500">Rooms</p>
-                    </div>
-                    <p className="font-semibold text-gray-900">{selectedViewingDetails.rooms}</p>
-                  </div>
-                )}
-                {selectedViewingDetails.bedRooms && (
-                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
-                        <span className="text-purple-600 text-xs font-bold">B</span>
-                      </div>
-                      <p className="text-xs text-gray-500">Bedrooms</p>
-                    </div>
-                    <p className="font-semibold text-gray-900">{selectedViewingDetails.bedRooms}</p>
-                  </div>
-                )}
-                {selectedViewingDetails.bathRooms && (
-                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 bg-cyan-100 rounded-lg flex items-center justify-center">
-                        <span className="text-cyan-600 text-xs font-bold">🚿</span>
-                      </div>
-                      <p className="text-xs text-gray-500">Bathrooms</p>
-                    </div>
-                    <p className="font-semibold text-gray-900">{selectedViewingDetails.bathRooms}</p>
-                  </div>
-                )}
-                {selectedViewingDetails.floors && (
-                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
-                        <span className="text-orange-600 text-xs font-bold">F</span>
-                      </div>
-                      <p className="text-xs text-gray-500">Floors</p>
-                    </div>
-                    <p className="font-semibold text-gray-900">{selectedViewingDetails.floors}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
             {/* Sales Agent */}
             {selectedViewingDetails.salesAgent && (
               <div>
@@ -614,29 +788,6 @@ export default function ViewingsPage() {
               </div>
             )}
 
-            {/* Property Owner */}
-            {selectedViewingDetails.propertyOwner && (
-              <div>
-                <h4 className="text-sm font-semibold text-gray-900 mb-3">Property Owner</h4>
-                <div className="p-4 border border-gray-200 rounded-lg bg-white">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center text-white font-bold">
-                      {selectedViewingDetails.propertyOwner.firstName?.[0]}{selectedViewingDetails.propertyOwner.lastName?.[0]}
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-semibold text-gray-900">
-                        {selectedViewingDetails.propertyOwner.firstName} {selectedViewingDetails.propertyOwner.lastName}
-                      </p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Badge variant="success" className="text-xs">{selectedViewingDetails.propertyOwner.tier}</Badge>
-                      </div>
-                      <p className="text-xs text-gray-500 mt-1">{selectedViewingDetails.propertyOwner.phoneNumber}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* Customer Requirements */}
             {selectedViewingDetails.customerRequirements && (
               <div>
@@ -647,25 +798,19 @@ export default function ViewingsPage() {
               </div>
             )}
 
-            {/* Attached Documents */}
-            {selectedViewingDetails.attachedDocuments && selectedViewingDetails.attachedDocuments.length > 0 && (
-              <div>
-                <h4 className="text-sm font-semibold text-gray-900 mb-3">Attached Documents</h4>
-                <div className="space-y-2">
-                  {selectedViewingDetails.attachedDocuments.map((doc, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-red-100 rounded flex items-center justify-center">
-                          <span className="text-red-600 text-xs font-bold">📄</span>
-                        </div>
-                        <span className="text-sm text-gray-700">{doc.split('/').pop()}</span>
-                      </div>
-                      <button className="text-blue-600 hover:text-blue-700 text-xs font-medium">
-                        Download
-                      </button>
-                    </div>
-                  ))}
-                </div>
+            {/* Actions */}
+            {selectedViewingDetails.status === 'COMPLETED' && !selectedViewingDetails.rating && (
+              <div className="pt-4 border-t">
+                <button
+                  onClick={() => {
+                    setSelectedViewingDetails(null);
+                    openRateModal(selectedViewingDetails.id);
+                  }}
+                  className="w-full py-3 text-sm font-medium text-white bg-yellow-500 hover:bg-yellow-600 rounded-lg transition-colors flex items-center justify-center gap-2"
+                >
+                  <Star className="w-4 h-4" />
+                  Rate This Experience
+                </button>
               </div>
             )}
           </div>

@@ -2,42 +2,31 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Building, Search, MapPin, Bed, Bath, Square, Heart, ChevronRight, Star, ArrowRight, Home, Key, Users, Shield, Phone, Mail, ChevronDown, Menu, X, Loader2 } from 'lucide-react';
+import { Building, MapPin, ArrowRight, Home, Key, Users, Shield, Loader2, ShoppingBag, MapPinned } from 'lucide-react';
 import NavBar from '@/app/components/layout/NavBar';
 import Footer from '@/app/components/layout/Footer';
+import PropertyCard from '@/app/components/cards/PropertyCard';
 import { propertyService } from '@/lib/api/services/property.service';
 import { locationService, LocationCardResponse } from '@/lib/api/services/location.service';
-import { PropertyCard } from '@/lib/api/types';
-
-const stats = [
-  { value: '10K+', label: 'Properties', icon: Building },
-  { value: '8K+', label: 'Happy Customers', icon: Users },
-  { value: '500+', label: 'Expert Agents', icon: Shield },
-  { value: '15+', label: 'Years Experience', icon: Star },
-];
+import { PropertyCard as PropertyCardType } from '@/lib/api/types';
 
 export default function LandingPage() {
-  const [searchType, setSearchType] = useState<'buy' | 'rent'>('buy');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
   // Featured properties from API
-  const [featuredProperties, setFeaturedProperties] = useState<PropertyCard[]>([]);
+  const [featuredProperties, setFeaturedProperties] = useState<PropertyCardType[]>([]);
   const [isLoadingFeatured, setIsLoadingFeatured] = useState(true);
 
   // Top cities from API
   const [topCities, setTopCities] = useState<LocationCardResponse[]>([]);
   const [isLoadingCities, setIsLoadingCities] = useState(true);
 
-  // Fetch featured properties
+  // Fetch featured properties (using regular endpoint with filters)
   useEffect(() => {
     const fetchFeatured = async () => {
       try {
         const response = await propertyService.getPropertyCards({
-          topK: true,
           limit: 4,
           sortType: 'desc',
-          sortBy: 'createdAt',
+          statuses: ['AVAILABLE', 'APPROVED'],
         });
         setFeaturedProperties(response.data);
       } catch (error) {
@@ -50,14 +39,18 @@ export default function LandingPage() {
     fetchFeatured();
   }, []);
 
-  // Fetch top cities
+  // Fetch popular cities (using location cards endpoint)
   useEffect(() => {
     const fetchTopCities = async () => {
       try {
-        const response = await locationService.getTopCities(1, 10);
+        const response = await locationService.getLocationCards({
+          locationTypeEnum: 'CITY',
+          limit: 8,
+          isActive: true,
+        });
         setTopCities(response.data || []);
       } catch (error) {
-        console.error('Failed to fetch top cities:', error);
+        console.error('Failed to fetch cities:', error);
       } finally {
         setIsLoadingCities(false);
       }
@@ -66,43 +59,20 @@ export default function LandingPage() {
     fetchTopCities();
   }, []);
 
-  const formatPrice = (amount: number, transactionType: 'SALE' | 'RENTAL' | null) => {
-    if (transactionType === 'RENTAL') {
-      return `${amount.toLocaleString('vi-VN')} VND/tháng`;
-    }
-    return `${amount.toLocaleString('vi-VN')} VND`;
-  };
-
-  // Helper to convert image URLs - only accept absolute URLs
   const getImageUrl = (url: string | null | undefined): string => {
-    // Fallback placeholder image
     const fallbackImage = 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800';
-    
-    // If no URL, use fallback
     if (!url) return fallbackImage;
-    
-    // Only accept absolute URLs (http:// or https://)
-    // Reject relative paths, PDFs, documents, etc.
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      return fallbackImage;
-    }
-    
-    // If it's a PDF even with absolute URL, use fallback
-    if (url.includes('.pdf')) {
-      return fallbackImage;
-    }
-    
-    // Valid absolute URL
+    if (!url.startsWith('http://') && !url.startsWith('https://')) return fallbackImage;
+    if (url.includes('.pdf')) return fallbackImage;
     return url;
   };
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Navigation */}
       <NavBar />
 
-      {/* Hero Section */}
-      <section className="pt-24 pb-16 bg-gradient-to-br from-red-50 via-white to-orange-50">
+      {/* Hero Section - Reduced padding */}
+      <section className="pt-8 pb-12 bg-gradient-to-br from-red-50 via-white to-orange-50">
         <div className="max-w-[90%] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div>
@@ -115,58 +85,40 @@ export default function LandingPage() {
                 Discover the perfect home, apartment, or investment property. We connect buyers, renters, and owners with trusted listings across Vietnam.
               </p>
 
-              {/* Search Box */}
-              <div className="mt-8 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-                {/* Type Tabs */}
-                <div className="flex gap-2 mb-4">
-                  <button
-                    onClick={() => setSearchType('buy')}
-                    className={`px-6 py-2 text-sm font-medium rounded-lg transition-colors ${
-                      searchType === 'buy' ? 'bg-red-600 text-white' : 'text-gray-600 hover:bg-gray-100'
-                    }`}
-                  >
-                    Buy
-                  </button>
-                  <button
-                    onClick={() => setSearchType('rent')}
-                    className={`px-6 py-2 text-sm font-medium rounded-lg transition-colors ${
-                      searchType === 'rent' ? 'bg-red-600 text-white' : 'text-gray-600 hover:bg-gray-100'
-                    }`}
-                  >
-                    Rent
-                  </button>
-                </div>
-
-                {/* Search Input */}
-                <div className="flex gap-3">
-                  <div className="relative flex-1">
-                    <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                    <input
-                      type="text"
-                      placeholder="Search by location, property type..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-12 pr-4 py-3.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-gray-900"
-                    />
+              {/* Action Buttons - Replacing search bar */}
+              <div className="mt-8 flex flex-wrap gap-4">
+                <Link
+                  href="/properties?type=sale"
+                  className="flex items-center gap-3 px-6 py-4 bg-red-600 text-white font-medium rounded-xl hover:bg-red-700 transition-all shadow-lg hover:shadow-xl"
+                >
+                  <ShoppingBag className="w-6 h-6" />
+                  <div className="text-left">
+                    <span className="block text-lg font-bold">Buy Property</span>
+                    <span className="text-sm text-red-200">Find your dream home</span>
                   </div>
-                  <Link
-                    href={`/properties?type=${searchType}&q=${searchQuery}`}
-                    className="px-8 py-3.5 bg-red-600 text-white font-medium rounded-xl hover:bg-red-700 transition-colors flex items-center gap-2"
-                  >
-                    <Search className="w-5 h-5" />
-                    <span className="hidden sm:inline">Search</span>
-                  </Link>
-                </div>
-              </div>
-
-              {/* Quick Stats */}
-              <div className="mt-8 flex gap-8">
-                {stats.slice(0, 3).map((stat) => (
-                  <div key={stat.label}>
-                    <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-                    <p className="text-sm text-gray-500">{stat.label}</p>
+                </Link>
+                
+                <Link
+                  href="/properties?type=rent"
+                  className="flex items-center gap-3 px-6 py-4 bg-white text-gray-900 font-medium rounded-xl hover:bg-gray-50 transition-all shadow-lg hover:shadow-xl border border-gray-200"
+                >
+                  <Key className="w-6 h-6 text-red-600" />
+                  <div className="text-left">
+                    <span className="block text-lg font-bold">Rent Property</span>
+                    <span className="text-sm text-gray-500">Find rentals near you</span>
                   </div>
-                ))}
+                </Link>
+
+                <Link
+                  href="/locations"
+                  className="flex items-center gap-3 px-6 py-4 bg-white text-gray-900 font-medium rounded-xl hover:bg-gray-50 transition-all shadow-lg hover:shadow-xl border border-gray-200"
+                >
+                  <MapPinned className="w-6 h-6 text-blue-600" />
+                  <div className="text-left">
+                    <span className="block text-lg font-bold">View Locations</span>
+                    <span className="text-sm text-gray-500">Explore land prices</span>
+                  </div>
+                </Link>
               </div>
             </div>
 
@@ -207,53 +159,29 @@ export default function LandingPage() {
             <div className="flex items-center justify-center py-16">
               <Loader2 className="w-8 h-8 text-red-600 animate-spin" />
             </div>
+          ) : featuredProperties.length === 0 ? (
+            <div className="text-center py-16 text-gray-500">
+              <Building className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+              <p>No featured properties available</p>
+            </div>
           ) : (
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {(featuredProperties || []).map((property) => (
-                <Link
+              {featuredProperties.map((property) => (
+                <PropertyCard
                   key={property.id}
-                  href={`/property/${property.id}`}
-                  className="group bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100"
-                >
-                  {/* Image */}
-                  <div className="relative h-48 overflow-hidden">
-                    <img
-                      src={getImageUrl(property.thumbnailUrl)}
-                      alt={property.title}
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                    />
-                    <div className="absolute top-3 left-3">
-                      <span className={`px-3 py-1 text-xs font-bold rounded-full ${
-                        property.transactionType === 'SALE' ? 'bg-green-500 text-white' : 'bg-blue-500 text-white'
-                      }`}>
-                        For {property.transactionType === 'SALE' ? 'Sale' : 'Rent'}
-                      </span>
-                    </div>
-                    <button className="absolute top-3 right-3 w-8 h-8 bg-white/90 rounded-full flex items-center justify-center hover:bg-white transition-colors">
-                      <Heart className={`w-4 h-4 ${property.favorite ? 'fill-red-500 text-red-500' : 'text-gray-600'}`} />
-                    </button>
-                  </div>
-
-                  {/* Content */}
-                  <div className="p-4">
-                    <p className="text-xl font-bold text-red-600">{formatPrice(property.price, property.transactionType)}</p>
-                    <h3 className="font-semibold text-gray-900 mt-1 line-clamp-1">{property.title}</h3>
-                    <p className="text-sm text-gray-500 flex items-center gap-1 mt-2">
-                      <MapPin className="w-3 h-3" />
-                      {property.location}
-                    </p>
-
-                    <div className="flex items-center gap-4 mt-4 pt-4 border-t border-gray-100 text-sm text-gray-600">
-                      <span className="flex items-center gap-1">
-                        <Square className="w-4 h-4 text-gray-400" />
-                        {property.totalArea}m²
-                      </span>
-                      <span className="text-gray-400">
-                        {property.numberOfImages} photos
-                      </span>
-                    </div>
-                  </div>
-                </Link>
+                  id={property.id}
+                  image={getImageUrl(property.thumbnailUrl)}
+                  title={property.title}
+                  price={`${property.price.toLocaleString('vi-VN')} VND`}
+                  priceUnit={property.transactionType === 'RENTAL' ? '/tháng' : ''}
+                  address={property.location}
+                  area={`${property.totalArea}m²`}
+                  numberOfImages={property.numberOfImages}
+                  type={property.transactionType === 'SALE' ? 'Sale' : 'Rent'}
+                  isFavorite={property.favorite}
+                  showFavorite={false}
+                  variant="profile"
+                />
               ))}
             </div>
           )}
@@ -290,6 +218,11 @@ export default function LandingPage() {
           {isLoadingCities ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="w-8 h-8 text-red-600 animate-spin" />
+            </div>
+          ) : topCities.length === 0 ? (
+            <div className="text-center py-16 text-gray-500">
+              <MapPin className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+              <p>No cities available</p>
             </div>
           ) : (
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -344,7 +277,7 @@ export default function LandingPage() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8">
             <div className="text-center">
               <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <Search className="w-8 h-8 text-red-600" />
+                <Home className="w-8 h-8 text-red-600" />
               </div>
               <h3 className="font-semibold text-gray-900 mb-2">Easy Search</h3>
               <p className="text-sm text-gray-600">Find properties quickly with our powerful search filters</p>
@@ -398,7 +331,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Footer */}
       <Footer />
     </div>
   );

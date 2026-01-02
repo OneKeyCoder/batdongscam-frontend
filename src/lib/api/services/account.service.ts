@@ -45,13 +45,17 @@ export interface UserProfile {
   frontIdPicturePath?: string;
   backIdPicturePath?: string;
   lastLoginAt?: string;
-  profile?: any;
+  profile?: {
+    totalListings: number;
+    totalBought: number;
+    totalRented: number;
+  };
   statisticMonth?: any;
   statisticAll?: any;
   propertyProfile?: {
     totalListings: number;
-    totalSolds: number;
-    totalRentals: number;
+    totalBought: number;
+    totalRented: number;
   };
 }
 

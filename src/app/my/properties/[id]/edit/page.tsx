@@ -1,13 +1,31 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Upload, MapPin, Building, Bed, Bath, Square, DollarSign, Tag, Home, Image as ImageIcon, X, Check, Camera, FileText, Loader2 } from 'lucide-react';
+import { ArrowLeft, Upload, MapPin, Building, Bed, Bath, Square, DollarSign, Tag, Home, Image as ImageIcon, X, Check, Camera, FileText, Loader2, Plus, AlertCircle, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
-import { propertyService, CreatePropertyRequest } from '@/lib/api/services/property.service';
+import { propertyService, CreatePropertyRequest, DocumentUploadInfo, DocumentTypeResponse, UpdatePropertyRequest } from '@/lib/api/services/property.service';
 import { locationService, PropertyType as PropertyTypeData } from '@/lib/api/services/location.service';
 
 type TransactionType = 'Sale' | 'Rent';
+
+interface DocumentEntry {
+  file: File;
+  documentTypeId: string;
+  documentNumber?: string;
+  documentName?: string;
+  issueDate?: string;
+  expiryDate?: string;
+  issuingAuthority?: string;
+}
+
+interface ExistingDocument {
+  id: string;
+  documentTypeName?: string;
+  documentName?: string;
+  filePath?: string;
+  verificationStatus?: string;
+}
 
 interface PropertyForm {
   title: string;
@@ -31,7 +49,6 @@ interface PropertyForm {
   balconyOrientation?: string;
   features: string[];
   images: File[];
-  documents: File[];
 }
 
 const availableFeatures = [
@@ -47,8 +64,10 @@ export default function EditPropertyPage() {
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Existing media management
   const [existingImages, setExistingImages] = useState<Array<{id: string, url: string}>>([]);
-  const [existingDocuments, setExistingDocuments] = useState<Array<{id: string, name: string, url: string}>>([]);
+  const [existingDocuments, setExistingDocuments] = useState<ExistingDocument[]>([]);
   const [mediaIdsToRemove, setMediaIdsToRemove] = useState<string[]>([]);
   const [documentIdsToRemove, setDocumentIdsToRemove] = useState<string[]>([]);
   
@@ -69,10 +88,13 @@ export default function EditPropertyPage() {
     yearBuilt: '',
     features: [],
     images: [],
-    documents: [],
   });
   const [imagesPreviews, setImagesPreviews] = useState<string[]>([]);
-  const [documentNames, setDocumentNames] = useState<string[]>([]);
+  
+  // Document management
+  const [documentTypes, setDocumentTypes] = useState<DocumentTypeResponse[]>([]);
+  const [documentEntries, setDocumentEntries] = useState<DocumentEntry[]>([]);
+  const [isLoadingDocTypes, setIsLoadingDocTypes] = useState(false);
   
   // Location and property type data
   const [propertyTypes, setPropertyTypes] = useState<PropertyTypeData[]>([]);
@@ -92,18 +114,13 @@ export default function EditPropertyPage() {
         const wardId = (property as any).wardId || '';
         
         // Fetch location data if we have wardId
-        // We need to fetch the ward details to get district and city IDs
         let cityId = '';
         let districtId = '';
         
         if (wardId) {
           try {
-            // We need to get ward details which includes district and city
-            // For now, we'll need to fetch all cities, then districts, then find the ward
-            // This is not ideal but necessary given the flat structure
             const citiesData = await locationService.getChildLocations('CITY');
             
-            // Try each city to find the one containing our ward
             for (const [cId, cityName] of citiesData.entries()) {
               const districtsData = await locationService.getChildLocations('DISTRICT', cId);
               for (const [dId, districtName] of districtsData.entries()) {
@@ -135,12 +152,13 @@ export default function EditPropertyPage() {
         if (property.documentList && property.documentList.length > 0) {
           setExistingDocuments(property.documentList.map((d: any) => ({
             id: d.id,
-            name: d.documentName,
-            url: d.filePath
+            documentTypeName: d.documentTypeName,
+            documentName: d.documentName,
+            filePath: d.filePath,
+            verificationStatus: d.verificationStatus
           })));
         }
         
-        // IMPORTANT: Set formData LAST, after all async operations
         const newFormData: PropertyForm = {
           title: property.title || '',
           description: property.description || '',
@@ -160,16 +178,11 @@ export default function EditPropertyPage() {
           yearBuilt: property.yearBuilt?.toString() || '',
           houseOrientation: property.houseOrientation || '',
           balconyOrientation: property.balconyOrientation || '',
-          features: property.amenities ? property.amenities.split(',').map(f => f.trim()) : [],
+          features: property.amenities ? property.amenities.split(',').map((f: string) => f.trim()) : [],
           images: [],
-          documents: [],
         };
         
-        console.log('📝 Form Data to Set:', newFormData);
-        
         setFormData(newFormData);
-        
-        // Set loading to false AFTER everything is set
         setIsLoading(false);
       } catch (error) {
         console.error('Error fetching property:', error);
@@ -184,18 +197,23 @@ export default function EditPropertyPage() {
     }
   }, [propertyId, router]);
 
-  // Fetch property types and cities on mount
+  // Fetch property types, cities, and document types on mount
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
-        const [typesData, citiesData] = await Promise.all([
+        setIsLoadingDocTypes(true);
+        const [typesData, citiesData, docTypesData] = await Promise.all([
           locationService.getPropertyTypes(),
-          locationService.getChildLocations('CITY')
+          locationService.getChildLocations('CITY'),
+          propertyService.getDocumentTypes()
         ]);
         setPropertyTypes(typesData);
         setCities(citiesData);
+        setDocumentTypes(docTypesData);
       } catch (error) {
         console.error('Error fetching initial data:', error);
+      } finally {
+        setIsLoadingDocTypes(false);
       }
     };
     fetchInitialData();
@@ -203,17 +221,14 @@ export default function EditPropertyPage() {
 
   // Fetch districts when city changes (but not on initial load)
   useEffect(() => {
-    // Skip if we're still loading initial data
     if (isLoading) return;
     
-    // Skip if city hasn't changed from initial value
     if (!formData.cityId) {
       setDistricts(new Map());
       setWards(new Map());
       return;
     }
     
-    // Only fetch if districts aren't already loaded for this city
     if (districts.size === 0 || formData.cityId) {
       setIsLoadingLocations(true);
       locationService.getChildLocations('DISTRICT', formData.cityId)
@@ -227,16 +242,13 @@ export default function EditPropertyPage() {
 
   // Fetch wards when district changes (but not on initial load)
   useEffect(() => {
-    // Skip if we're still loading initial data
     if (isLoading) return;
     
-    // Skip if district hasn't changed from initial value
     if (!formData.districtId) {
       setWards(new Map());
       return;
     }
     
-    // Only fetch if wards aren't already loaded for this district
     if (wards.size === 0 || formData.districtId) {
       setIsLoadingLocations(true);
       locationService.getChildLocations('WARD', formData.districtId)
@@ -254,7 +266,6 @@ export default function EditPropertyPage() {
       const newFiles = Array.from(files);
       setFormData({ ...formData, images: [...formData.images, ...newFiles] });
       
-      // Create previews
       newFiles.forEach(file => {
         const reader = new FileReader();
         reader.onloadend = () => {
@@ -273,21 +284,38 @@ export default function EditPropertyPage() {
     setImagesPreviews(imagesPreviews.filter((_, i) => i !== index));
   };
 
-  const handleDocumentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files) {
-      const newFiles = Array.from(files);
-      setFormData({ ...formData, documents: [...formData.documents, ...newFiles] });
-      setDocumentNames(prev => [...prev, ...newFiles.map(f => f.name)]);
-    }
+  const removeExistingImage = (imageId: string) => {
+    setMediaIdsToRemove(prev => [...prev, imageId]);
+    setExistingImages(existingImages.filter(img => img.id !== imageId));
   };
 
-  const removeDocument = (index: number) => {
-    setFormData({
-      ...formData,
-      documents: formData.documents.filter((_, i) => i !== index)
-    });
-    setDocumentNames(documentNames.filter((_, i) => i !== index));
+  // Document handling
+  const handleAddDocument = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const newEntries: DocumentEntry[] = Array.from(files).map(file => ({
+        file,
+        documentTypeId: '',
+        documentName: file.name.replace(/\.[^/.]+$/, ''),
+      }));
+      setDocumentEntries(prev => [...prev, ...newEntries]);
+    }
+    e.target.value = '';
+  };
+
+  const updateDocumentEntry = (index: number, updates: Partial<DocumentEntry>) => {
+    setDocumentEntries(prev => 
+      prev.map((entry, i) => i === index ? { ...entry, ...updates } : entry)
+    );
+  };
+
+  const removeDocumentEntry = (index: number) => {
+    setDocumentEntries(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const removeExistingDocument = (docId: string) => {
+    setDocumentIdsToRemove(prev => [...prev, docId]);
+    setExistingDocuments(existingDocuments.filter(doc => doc.id !== docId));
   };
 
   const toggleFeature = (feature: string) => {
@@ -309,7 +337,6 @@ export default function EditPropertyPage() {
     setIsSubmitting(true);
 
     try {
-      // Validate required fields
       if (!formData.wardId) {
         alert('Please select a ward (city, district, and ward are required)');
         setIsSubmitting(false);
@@ -322,7 +349,26 @@ export default function EditPropertyPage() {
         return;
       }
 
-      const propertyData: any = {
+      // Validate that all document entries have a type selected
+      const invalidDocs = documentEntries.filter(entry => !entry.documentTypeId);
+      if (invalidDocs.length > 0) {
+        alert('Please select a document type for all uploaded documents');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Build document metadata
+      const documentMetadata: DocumentUploadInfo[] = documentEntries.map((entry, index) => ({
+        documentTypeId: entry.documentTypeId,
+        documentNumber: entry.documentNumber,
+        documentName: entry.documentName,
+        issueDate: entry.issueDate,
+        expiryDate: entry.expiryDate,
+        issuingAuthority: entry.issuingAuthority,
+        fileIndex: index
+      }));
+
+      const propertyData: UpdatePropertyRequest = {
         title: formData.title,
         description: formData.description,
         transactionType: formData.type === 'Sale' ? 'SALE' : 'RENTAL',
@@ -339,14 +385,18 @@ export default function EditPropertyPage() {
         amenities: formData.features.join(', '),
         propertyTypeId: formData.propertyTypeId,
         wardId: formData.wardId,
-        mediaIdsToRemove,
-        documentIdsToRemove,
+        mediaIdsToRemove: mediaIdsToRemove.length > 0 ? mediaIdsToRemove : undefined,
+        documentIdsToRemove: documentIdsToRemove.length > 0 ? documentIdsToRemove : undefined,
+        documentMetadata: documentMetadata.length > 0 ? documentMetadata : undefined,
       };
+
+      const documentFiles = documentEntries.map(entry => entry.file);
 
       await propertyService.updateProperty(
         propertyId,
         propertyData,
-        formData.images
+        formData.images,
+        documentFiles
       );
 
       alert('Property updated successfully!');
@@ -360,7 +410,6 @@ export default function EditPropertyPage() {
   };
 
   const nextStep = () => {
-    // Validation for Step 1
     if (step === 1) {
       if (!formData.title || !formData.description || !formData.type || 
           !formData.propertyTypeId || !formData.price) {
@@ -368,7 +417,6 @@ export default function EditPropertyPage() {
         return;
       }
     }
-    // Validation for Step 2
     if (step === 2) {
       if (!formData.area || !formData.address || !formData.wardId) {
         alert('Please fill in all required fields including address and location');
@@ -433,7 +481,6 @@ export default function EditPropertyPage() {
               Basic Information
             </h2>
 
-            {/* Property Type */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-3">Listing Type</label>
               <div className="grid grid-cols-2 gap-4">
@@ -464,7 +511,6 @@ export default function EditPropertyPage() {
               </div>
             </div>
 
-            {/* Property Type */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Property Type</label>
               <select
@@ -482,7 +528,6 @@ export default function EditPropertyPage() {
               </select>
             </div>
 
-            {/* Title */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Property Title</label>
               <input
@@ -495,7 +540,6 @@ export default function EditPropertyPage() {
               />
             </div>
 
-            {/* Description */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
               <textarea
@@ -508,7 +552,6 @@ export default function EditPropertyPage() {
               />
             </div>
 
-            {/* Price */}
             <div className={`grid ${formData.type === 'Rent' ? 'grid-cols-3' : 'grid-cols-2'} gap-4`}>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Price</label>
@@ -519,15 +562,8 @@ export default function EditPropertyPage() {
                     inputMode="numeric"
                     value={formData.price ? Number(formData.price).toLocaleString() : ''}
                     onChange={(e) => {
-                      // Remove all non-digit characters
                       const value = e.target.value.replace(/\D/g, '');
                       setFormData({ ...formData, price: value });
-                    }}
-                    onKeyPress={(e) => {
-                      // Only allow digits
-                      if (!/[0-9]/.test(e.key)) {
-                        e.preventDefault();
-                      }
                     }}
                     placeholder="850,000"
                     className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
@@ -584,7 +620,6 @@ export default function EditPropertyPage() {
               Property Details
             </h2>
 
-            {/* Location */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
               <div className="relative">
@@ -654,7 +689,6 @@ export default function EditPropertyPage() {
               </div>
             </div>
 
-            {/* Specifications */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Bedrooms</label>
@@ -708,7 +742,6 @@ export default function EditPropertyPage() {
               </div>
             </div>
 
-            {/* Additional Details */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Rooms</label>
@@ -739,17 +772,13 @@ export default function EditPropertyPage() {
                   onChange={(e) => setFormData({ ...formData, houseOrientation: e.target.value || undefined })}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-gray-900"
                 >
-                  <option value="">Select orientation</option>
+                  <option value="">Select</option>
                   <option value="NORTH">North</option>
                   <option value="SOUTH">South</option>
                   <option value="EAST">East</option>
                   <option value="WEST">West</option>
-                  <option value="NORTHEAST">Northeast</option>
-                  <option value="NORTHWEST">Northwest</option>
                   <option value="NORTH_EAST">North East</option>
                   <option value="NORTH_WEST">North West</option>
-                  <option value="SOUTHEAST">Southeast</option>
-                  <option value="SOUTHWEST">Southwest</option>
                   <option value="SOUTH_EAST">South East</option>
                   <option value="SOUTH_WEST">South West</option>
                 </select>
@@ -761,24 +790,19 @@ export default function EditPropertyPage() {
                   onChange={(e) => setFormData({ ...formData, balconyOrientation: e.target.value || undefined })}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-gray-900"
                 >
-                  <option value="">Select orientation</option>
+                  <option value="">Select</option>
                   <option value="NORTH">North</option>
                   <option value="SOUTH">South</option>
                   <option value="EAST">East</option>
                   <option value="WEST">West</option>
-                  <option value="NORTHEAST">Northeast</option>
-                  <option value="NORTHWEST">Northwest</option>
                   <option value="NORTH_EAST">North East</option>
                   <option value="NORTH_WEST">North West</option>
-                  <option value="SOUTHEAST">Southeast</option>
-                  <option value="SOUTHWEST">Southwest</option>
                   <option value="SOUTH_EAST">South East</option>
                   <option value="SOUTH_WEST">South West</option>
                 </select>
               </div>
             </div>
 
-            {/* Features */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-3">Features & Amenities</label>
               <div className="flex flex-wrap gap-2">
@@ -818,7 +842,7 @@ export default function EditPropertyPage() {
           </div>
         )}
 
-        {/* Step 3: Images */}
+        {/* Step 3: Images & Documents */}
         {step === 3 && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
             <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
@@ -835,15 +859,12 @@ export default function EditPropertyPage() {
                     <div key={image.id} className="relative group aspect-square">
                       <img 
                         src={image.url} 
-                        alt={`Existing ${index + 1}`}
+                        alt={`Property ${index + 1}`}
                         className="w-full h-full object-cover rounded-xl"
                       />
                       <button
                         type="button"
-                        onClick={() => {
-                          setMediaIdsToRemove([...mediaIdsToRemove, image.id]);
-                          setExistingImages(existingImages.filter(img => img.id !== image.id));
-                        }}
+                        onClick={() => removeExistingImage(image.id)}
                         className="absolute top-2 right-2 w-6 h-6 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
                       >
                         <X className="w-4 h-4" />
@@ -877,10 +898,10 @@ export default function EditPropertyPage() {
               </label>
             </div>
 
-            {/* Image Previews */}
+            {/* New Image Previews */}
             {imagesPreviews.length > 0 && (
               <div>
-                <p className="text-sm font-medium text-gray-700 mb-3">New Images to Upload ({imagesPreviews.length})</p>
+                <p className="text-sm font-medium text-gray-700 mb-3">New Images ({imagesPreviews.length})</p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {imagesPreviews.map((preview, index) => (
                     <div key={index} className="relative group aspect-square">
@@ -896,11 +917,6 @@ export default function EditPropertyPage() {
                       >
                         <X className="w-4 h-4" />
                       </button>
-                      {index === 0 && (
-                        <span className="absolute bottom-2 left-2 px-2 py-1 bg-red-600 text-white text-xs rounded font-medium">
-                          Cover
-                        </span>
-                      )}
                     </div>
                   ))}
                 </div>
@@ -913,7 +929,7 @@ export default function EditPropertyPage() {
                 <FileText className="w-5 h-5 text-red-600" />
                 Property Documents
               </h3>
-              
+
               {/* Existing Documents */}
               {existingDocuments.length > 0 && (
                 <div className="mb-4">
@@ -923,63 +939,158 @@ export default function EditPropertyPage() {
                       <div key={doc.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg group hover:bg-gray-100 transition-colors">
                         <div className="flex items-center gap-3">
                           <FileText className="w-5 h-5 text-red-600" />
-                          <span className="text-sm text-gray-700 font-medium">{doc.name}</span>
+                          <div>
+                            <p className="text-sm text-gray-900 font-medium">{doc.documentName || 'Document'}</p>
+                            <p className="text-xs text-gray-500">{doc.documentTypeName}</p>
+                          </div>
+                          {doc.verificationStatus && (
+                            <span className={`px-2 py-0.5 text-xs rounded ${
+                              doc.verificationStatus === 'VERIFIED' ? 'bg-green-100 text-green-700' :
+                              doc.verificationStatus === 'PENDING' ? 'bg-yellow-100 text-yellow-700' :
+                              'bg-gray-100 text-gray-700'
+                            }`}>
+                              {doc.verificationStatus}
+                            </span>
+                          )}
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setDocumentIdsToRemove([...documentIdsToRemove, doc.id]);
-                            setExistingDocuments(existingDocuments.filter(d => d.id !== doc.id));
-                          }}
-                          className="w-6 h-6 bg-red-100 text-red-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-red-200"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-2">
+                          {doc.filePath && (
+                            <a
+                              href={doc.filePath}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 text-gray-400 hover:text-blue-600 rounded"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <ExternalLink className="w-4 h-4" />
+                            </a>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => removeExistingDocument(doc.id)}
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
-
+              
               {/* Document Upload Area */}
-              <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-red-400 transition-colors">
+              <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-red-400 transition-colors mb-4">
                 <input
                   type="file"
-                  accept=".pdf,.doc,.docx,.txt"
+                  accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png"
                   multiple
-                  onChange={handleDocumentUpload}
+                  onChange={handleAddDocument}
                   className="hidden"
                   id="document-upload"
                 />
                 <label htmlFor="document-upload" className="cursor-pointer">
-                  <FileText className="w-10 h-10 text-gray-400 mx-auto mb-3" />
-                  <p className="text-gray-700 font-medium">Upload new documents</p>
-                  <p className="text-sm text-gray-500 mt-1">Contracts, certificates, blueprints, etc.</p>
-                  <p className="text-xs text-gray-400 mt-2">PDF, DOC, DOCX, TXT up to 10MB each</p>
+                  <Plus className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+                  <p className="text-gray-700 font-medium">Add New Documents</p>
+                  <p className="text-sm text-gray-500 mt-1">Legal documents, certificates, etc.</p>
                 </label>
               </div>
 
-              {/* Document List */}
-              {documentNames.length > 0 && (
-                <div className="mt-4">
-                  <p className="text-sm font-medium text-gray-700 mb-3">Uploaded Documents ({documentNames.length})</p>
-                  <div className="space-y-2">
-                    {documentNames.map((name, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg group hover:bg-gray-100 transition-colors">
+              {/* New Document List with Metadata */}
+              {documentEntries.length > 0 && (
+                <div className="space-y-4">
+                  <p className="text-sm font-medium text-gray-700">New Documents ({documentEntries.length})</p>
+                  {documentEntries.map((entry, index) => (
+                    <div key={index} className="border border-gray-200 rounded-xl p-4 space-y-3">
+                      <div className="flex items-start justify-between">
                         <div className="flex items-center gap-3">
-                          <FileText className="w-5 h-5 text-red-600" />
-                          <span className="text-sm text-gray-700 font-medium">{name}</span>
+                          <FileText className="w-8 h-8 text-red-600 flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">{entry.file.name}</p>
+                            <p className="text-xs text-gray-500">{(entry.file.size / 1024).toFixed(1)} KB</p>
+                          </div>
                         </div>
                         <button
                           type="button"
-                          onClick={() => removeDocument(index)}
-                          className="w-6 h-6 bg-red-100 text-red-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-red-200"
+                          onClick={() => removeDocumentEntry(index)}
+                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                         >
                           <X className="w-4 h-4" />
                         </button>
                       </div>
-                    ))}
-                  </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                            Document Type <span className="text-red-500">*</span>
+                          </label>
+                          <select
+                            value={entry.documentTypeId}
+                            onChange={(e) => updateDocumentEntry(index, { documentTypeId: e.target.value })}
+                            className={`w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500 ${
+                              !entry.documentTypeId ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                            }`}
+                            required
+                          >
+                            <option value="">Select type</option>
+                            {documentTypes.map((dt) => (
+                              <option key={dt.id} value={dt.id}>
+                                {dt.name} {dt.isCompulsory && '(Required)'}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Document Name</label>
+                          <input
+                            type="text"
+                            value={entry.documentName || ''}
+                            onChange={(e) => updateDocumentEntry(index, { documentName: e.target.value })}
+                            placeholder="e.g. Land Certificate"
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Document Number</label>
+                          <input
+                            type="text"
+                            value={entry.documentNumber || ''}
+                            onChange={(e) => updateDocumentEntry(index, { documentNumber: e.target.value })}
+                            placeholder="e.g. ABC-123456"
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Issuing Authority</label>
+                          <input
+                            type="text"
+                            value={entry.issuingAuthority || ''}
+                            onChange={(e) => updateDocumentEntry(index, { issuingAuthority: e.target.value })}
+                            placeholder="e.g. District Land Office"
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Issue Date</label>
+                          <input
+                            type="date"
+                            value={entry.issueDate || ''}
+                            onChange={(e) => updateDocumentEntry(index, { issueDate: e.target.value })}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Expiry Date</label>
+                          <input
+                            type="date"
+                            value={entry.expiryDate || ''}
+                            onChange={(e) => updateDocumentEntry(index, { expiryDate: e.target.value })}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -1004,12 +1115,12 @@ export default function EditPropertyPage() {
                 {isSubmitting ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    Saving...
+                    Updating...
                   </>
                 ) : (
                   <>
                     <Check className="w-5 h-5" />
-                    Save Changes
+                    Update Property
                   </>
                 )}
               </button>

@@ -26,6 +26,7 @@ interface Property {
   views: number;
   inquiries: number;
   createdAt: string;
+  numberOfImages: number;
 }
 
 const statusVariants: Record<PropertyStatus, 'success' | 'warning' | 'info' | 'danger' | 'default'> = {
@@ -73,15 +74,16 @@ export default function MyPropertiesPage() {
         title: item.title || 'Untitled',
         image: item.thumbnailUrl || '',
         address: item.location || '',
-        price: item.price ? `$${item.price.toLocaleString()}` : 'N/A',
+        price: item.price ? `${item.price.toLocaleString('vi-VN')} VND` : 'N/A',
         type: item.transactionType === 'SALE' ? 'Sale' : item.transactionType === 'RENTAL' ? 'Rent' : 'Sale',
         status: mapStatus(item.status),
-        bedrooms: 0, // Not available in card response
-        bathrooms: 0, // Not available in card response
-        area: item.totalArea ? `${item.totalArea} m²` : 'N/A',
-        views: 0, // Not available in card response
-        inquiries: 0, // Not available in card response
-        createdAt: item.createdAt || ''
+        bedrooms: 0,
+        bathrooms: 0,
+        area: item.totalArea ? `${item.totalArea}m²` : 'N/A',
+        views: 0,
+        inquiries: 0,
+        createdAt: item.createdAt || '',
+        numberOfImages: item.numberOfImages || 0
       }));
       setProperties(mappedData);
     } catch (error) {
@@ -251,6 +253,7 @@ export default function MyPropertiesPage() {
               priceUnit={property.type === 'Rent' ? '/tháng' : ''}
               address={property.address}
               area={property.area}
+              numberOfImages={property.numberOfImages}
               type={property.type}
               status={property.status === 'Active' ? 'Available' : property.status === 'Sold' ? 'Sold' : property.status === 'Rented' ? 'Rented' : 'Pending'}
               variant="profile"
