@@ -87,7 +87,7 @@ export interface MediaResponse {
 export interface DocumentResponse {
   id: string;
   filePath: string;
-  documentType: string;
+  documentTypeId: string;
   documentTypeName?: string;
   documentName?: string;
   verificationStatus?: string;
