@@ -8,9 +8,10 @@ const PROPERTY_ENDPOINTS = {
   PROPERTY_DETAIL: (id: string) => `/properties/${id}`,
   PROPERTY_STATUS: (id: string) => `/properties/${id}/status`,
   ASSIGN_AGENT: (propertyId: string, agentId: string) => `/properties/${propertyId}/assign-agent/${agentId}`,
-  PROPERTY_TYPES: '/properties/types',
+  PROPERTY_TYPES: '/public/locations/property-types',
   PROPERTY_TYPE_DETAIL: (id: string) => `/properties/types/${id}`,
   DOCUMENT_TYPES: '/public/document-types',
+  ADMIN_PROPERTIES: '/properties/cards'
 };
 
 // Document upload metadata - links document file to its type and details
@@ -154,6 +155,34 @@ export interface PropertyDetails {
 }
 
 export const propertyService = {
+  /**
+   * Get all properties (Admin/Authenticated) - Dùng sau khi create
+   */
+  async getAllProperties(filters: PropertyFilters = {}): Promise<PaginatedResponse<PropertyCard>> {
+    const params = new URLSearchParams();
+
+    // Add pagination params
+    if (filters.page) params.append('page', filters.page.toString());
+    if (filters.limit) params.append('limit', filters.limit.toString());
+    if (filters.sortType) params.append('sortType', filters.sortType);
+    if (filters.sortBy) params.append('sortBy', filters.sortBy);
+
+    // Add all other filters...
+    if (filters.cityIds?.length) {
+      filters.cityIds.forEach(id => params.append('cityIds', id));
+    }
+    if (filters.districtIds?.length) {
+      filters.districtIds.forEach(id => params.append('districtIds', id));
+    }
+    // ... rest of filters
+
+    const response = await apiClient.get<PaginatedResponse<PropertyCard>>(
+      `${PROPERTY_ENDPOINTS.PROPERTIES}?${params.toString()}` 
+    );
+
+    return response.data;
+  },
+
   /**
    * Get property cards with filters and pagination
    */
@@ -423,5 +452,14 @@ export const propertyService = {
     );
     return response.data.data;
   },
+
+  async getPropertyTypes(): Promise<PropertyTypeResponse[]> {
+    // Gọi endpoint GET /properties/types đã định nghĩa ở trên
+    const response = await apiClient.get<SingleResponse<PropertyTypeResponse[]>>(
+      PROPERTY_ENDPOINTS.PROPERTY_TYPES
+    );
+    return response.data.data;
+  },
 };
+
 

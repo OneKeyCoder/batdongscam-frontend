@@ -1,7 +1,9 @@
+'use client';
+
 import React from 'react';
 import Link from 'next/link';
 import { Eye, Loader2 } from 'lucide-react';
-import Badge from '@/app/components/ui/Badge';
+import Badge from '@/app/components/ui/Badge'; // Import Badge xịn của bạn
 import Pagination from '@/app/components/Pagination';
 import { SaleAgentListItem } from '@/lib/api/services/account.service';
 import { getFullUrl } from '@/lib/utils/urlUtils';
@@ -15,7 +17,19 @@ interface AgentsTableProps {
   onPageChange: (page: number) => void;
 }
 
-export default function AgentsTable({ data, loading, currentPage, itemsPerPage, totalItems, onPageChange }: AgentsTableProps) {
+export default function AgentsTable({
+  data, loading, currentPage, itemsPerPage, totalItems, onPageChange
+}: AgentsTableProps) {
+
+  const getTierVariant = (tier?: string) => {
+    switch (tier?.toUpperCase()) {
+      case 'PLATINUM': return 'pink';    
+      case 'GOLD': return 'gold';        
+      case 'SILVER': return 'default';  
+      case 'BRONZE': return 'warning';  
+      default: return 'default';
+    }
+  };
 
   if (loading) {
     return <div className="bg-white border border-gray-200 rounded-xl p-10 flex justify-center"><Loader2 className="w-8 h-8 text-red-600 animate-spin" /></div>;
@@ -49,7 +63,7 @@ export default function AgentsTable({ data, loading, currentPage, itemsPerPage, 
                         src={getFullUrl(agent.avatarUrl)}
                         alt={agent.firstName}
                         className="w-full h-full object-cover"
-                        onError={(e) => { e.currentTarget.src = `https://ui-avatars.com/api/?name=${agent.firstName}+${agent.lastName}` }}
+                        onError={(e) => { e.currentTarget.src = `https://ui-avatars.com/api/?name=${agent.firstName}+${agent.lastName}&background=random` }}
                       />
                     </div>
                     <div>
@@ -60,7 +74,9 @@ export default function AgentsTable({ data, loading, currentPage, itemsPerPage, 
                 </td>
                 <td className="px-6 py-4 font-bold text-red-600 text-center">{agent.point ?? 0}</td>
                 <td className="px-6 py-4">
-                  <Badge variant={agent.tier === 'PLATINUM' ? 'pink' : 'gold'}>{agent.tier || 'MEMBER'}</Badge>
+                  <Badge variant={getTierVariant(agent.tier) as any}>
+                    {agent.tier || 'MEMBER'}
+                  </Badge>
                 </td>
                 <td className="px-6 py-4 font-bold text-gray-700 text-center">{agent.totalAssignments ?? 0}</td>
                 <td className="px-6 py-4 font-bold text-gray-700 text-center">{agent.totalContracts ?? 0}</td>
@@ -68,11 +84,15 @@ export default function AgentsTable({ data, loading, currentPage, itemsPerPage, 
                   <span className="font-bold text-red-600">{agent.rating ?? 0}</span>
                   <span className="text-gray-400 text-xs ml-1">({agent.totalRates ?? 0})</span>
                 </td>
-                <td className="px-6 py-4 text-gray-900">{agent.hiredDate ? new Date(agent.hiredDate).toLocaleDateString() : '---'}</td>
+                <td className="px-6 py-4 text-gray-900">
+                  {agent.hiredDate ? new Date(agent.hiredDate).toLocaleDateString('en-GB') : '---'}
+                </td>
                 <td className="px-6 py-4 text-right">
                   <Link
                     href={`/admin/agents/${agent.id}`}
-                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg inline-flex items-center justify-center transition-colors"
+                    target="_blank"
+                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg inline-flex items-center justify-center transition-colors"
+                    title="View Details"
                   >
                     <Eye className="w-5 h-5" />
                   </Link>
@@ -82,12 +102,17 @@ export default function AgentsTable({ data, loading, currentPage, itemsPerPage, 
           </tbody>
         </table>
       </div>
-      <Pagination
-        currentPage={currentPage}
-        totalItems={totalItems}
-        pageSize={itemsPerPage}
-        onPageChange={onPageChange}
-      />
+
+      {totalItems > 0 && (
+        <div className="px-6 py-4 border-t border-gray-200">
+          <Pagination
+            currentPage={currentPage}
+            totalItems={totalItems}
+            pageSize={itemsPerPage}
+            onPageChange={onPageChange}
+          />
+        </div>
+      )}
     </div>
   );
 }

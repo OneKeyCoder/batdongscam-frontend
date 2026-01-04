@@ -176,10 +176,16 @@ export const contractService = {
    * Get paginated list of contracts (Admin/Agent only)
    */
   async getContracts(filters?: ContractFilters): Promise<PaginatedResponse<ContractListItem>> {
+    const params = { ...filters };
+    if (params.page && params.page > 0) {
+        params.page = params.page - 1;
+    } else {
+        params.page = 0; 
+    }
     const response = await apiClient.get<PaginatedResponse<ContractListItem>>(
       CONTRACT_ENDPOINTS.CONTRACTS,
-      { params: filters }
-    );
+      { params }
+    );  
     return response.data;
   },
 

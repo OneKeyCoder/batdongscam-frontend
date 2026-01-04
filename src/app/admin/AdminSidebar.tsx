@@ -19,6 +19,7 @@ import {
   UserCircle,
   Triangle
 } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 
 // Định nghĩa kiểu dữ liệu cho Menu Item
 interface MenuItemProps {
@@ -97,6 +98,7 @@ export default function AdminSidebarNav() {
     { href: '/admin/violations', icon: MessageSquareWarning, label: 'Violations' },
     { href: '/admin/reports', icon: BarChart3, label: 'Statistic Reports' },
     { href: '/admin/notifications', icon: Bell, label: 'Notifications', badge: '99+' },
+    { href: '/admin/ai-chat', icon: Sparkles, label: 'AI Assistant', badge: 'New' },
   ], []);
 
   return (

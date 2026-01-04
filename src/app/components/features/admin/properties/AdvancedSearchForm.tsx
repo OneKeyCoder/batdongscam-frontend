@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Minus, Plus, Search, RotateCcw, ChevronDown, X, AlertTriangle } from 'lucide-react';
-import { PropertyFilters } from '@/lib/api/types';
+import React, { useState, useEffect } from 'react';
+import { Minus, Plus, Search, RotateCcw, ChevronDown, AlertTriangle, X } from 'lucide-react';
+import { propertyService, PropertyTypeResponse } from '@/lib/api/services/property.service';
 import { LocationSelection } from '@/app/components/LocationPicker';
+import { PropertyFilters } from '@/lib/api/types';
 
 interface AdvancedSearchFormProps {
   onApply: (filters: PropertyFilters) => void;
@@ -13,7 +14,16 @@ interface AdvancedSearchFormProps {
   onRemoveLocation: (locationId: string) => void;
 }
 
-// Component Input số lượng (Không cho phép số âm)
+// [FIX] Danh sách dự phòng nếu API chết hoặc chưa có data
+const FALLBACK_PROPERTY_TYPES = [
+  { id: 'APARTMENT', typeName: 'Apartment' },
+  { id: 'VILLA', typeName: 'Villa' },
+  { id: 'HOUSE', typeName: 'House' },
+  { id: 'LAND', typeName: 'Land' },
+  { id: 'OFFICE', typeName: 'Office' },
+  { id: 'STUDIO', typeName: 'Studio' }
+];
+
 function CounterInput({ label, value, onChange }: { label: string, value: number, onChange: (val: number) => void }) {
   const handleDecrease = () => onChange(Math.max(0, value - 1));
   const handleIncrease = () => onChange(value + 1);
@@ -49,6 +59,9 @@ export default function AdvancedSearchForm({
   onRemoveLocation
 }: AdvancedSearchFormProps) {
 
+  // State lưu danh sách Property Types
+  const [propertyTypeList, setPropertyTypeList] = useState<PropertyTypeResponse[]>([]);
+
   const [status, setStatus] = useState('');
   const [propertyType, setPropertyType] = useState('');
   const [transactionType, setTransactionType] = useState('');
@@ -66,6 +79,34 @@ export default function AdvancedSearchForm({
   const [houseOrientation, setHouseOrientation] = useState('');
   const [balconyOrientation, setBalconyOrientation] = useState('');
 
+  const handleTransactionTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setTransactionType(e.target.value);
+  };
+
+  // [LOGIC MỚI] Gọi API -> Nếu rỗng thì dùng Fallback
+  useEffect(() => {
+    const fetchTypes = async () => {
+      try {
+        console.log("Fetching property types...");
+        const types = await propertyService.getPropertyTypes();
+
+        if (Array.isArray(types) && types.length > 0) {
+          console.log("Loaded types from API:", types);
+          setPropertyTypeList(types);
+        } else {
+          console.warn("API empty, using fallback types");
+          // @ts-ignore
+          setPropertyTypeList(FALLBACK_PROPERTY_TYPES);
+        }
+      } catch (error) {
+        console.error("Failed to load property types, using fallback", error);
+        // @ts-ignore
+        setPropertyTypeList(FALLBACK_PROPERTY_TYPES);
+      }
+    };
+    fetchTypes();
+  }, []);
+
   const handleNumberInput = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
     const val = e.target.value;
     if (val === '' || /^\d*\.?\d*$/.test(val)) {
@@ -79,7 +120,6 @@ export default function AdvancedSearchForm({
     const minA = minArea ? Number(minArea) : 0;
     const maxA = maxArea ? Number(maxArea) : 0;
 
-    // Validation
     if (maxP > 0 && minP > maxP) {
       alert("Min Price cannot be greater than Max Price!");
       return;
@@ -91,9 +131,10 @@ export default function AdvancedSearchForm({
 
     const filters: PropertyFilters = {};
 
-    // Mapping Filters
     if (status) filters.statuses = [status];
     if (transactionType) filters.transactionType = [transactionType as any];
+
+    // Gửi ID (UUID nếu từ API, String nếu từ Fallback)
     if (propertyType) filters.propertyTypeIds = [propertyType];
 
     if (minP > 0) filters.minPrice = minP;
@@ -109,7 +150,6 @@ export default function AdvancedSearchForm({
     if (houseOrientation) filters.houseOrientation = houseOrientation;
     if (balconyOrientation) filters.balconyOrientation = balconyOrientation;
 
-    // Mapping Locations
     if (selectedLocations.length > 0) {
       const cityIds: string[] = [];
       const districtIds: string[] = [];
@@ -169,7 +209,7 @@ export default function AdvancedSearchForm({
             </div>
           </div>
 
-          {/* 2. Property Type */}
+          {/* 2. Property Type (CÓ FALLBACK) */}
           <div>
             <label className="block text-xs font-bold text-gray-900 mb-1.5">Property Type</label>
             <div className="relative">
@@ -179,11 +219,11 @@ export default function AdvancedSearchForm({
                 onChange={(e) => setPropertyType(e.target.value)}
               >
                 <option value="">All Types</option>
-                <option value="APARTMENT">Apartment</option>
-                <option value="VILLA">Villa</option>
-                <option value="HOUSE">House</option>
-                <option value="LAND">Land</option>
-                <option value="OFFICE">Office</option>
+                {propertyTypeList.map((type) => (
+                  <option key={type.id} value={type.id}>
+                    {type.typeName}
+                  </option>
+                ))}
               </select>
               <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 pointer-events-none" />
             </div>
@@ -196,7 +236,7 @@ export default function AdvancedSearchForm({
               <select
                 className="w-full appearance-none border border-gray-300 rounded-lg px-3 py-2.5 bg-gray-50 text-xs font-medium focus:outline-none focus:border-red-500 cursor-pointer"
                 value={transactionType}
-                onChange={(e) => setTransactionType(e.target.value)}
+                onChange={handleTransactionTypeChange}
               >
                 <option value="">All</option>
                 <option value="SALE">For Sale</option>
@@ -226,7 +266,6 @@ export default function AdvancedSearchForm({
             <input type="text" placeholder="Unlimited" value={maxArea} onChange={(e) => handleNumberInput(e, setMaxArea)} className="w-full border border-gray-300 rounded-lg px-3 py-2.5 bg-gray-50 text-xs focus:outline-none focus:border-red-500" />
           </div>
 
-          {/* 6. Counters */}
           <CounterInput label="Bedrooms" value={bedrooms} onChange={setBedrooms} />
           <CounterInput label="Bathrooms" value={bathrooms} onChange={setBathrooms} />
           <CounterInput label="Floors" value={floors} onChange={setFloors} />
@@ -288,7 +327,7 @@ export default function AdvancedSearchForm({
                   <span
                     key={idx}
                     className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 bg-white border border-gray-200 rounded text-[10px] font-bold text-gray-700 shadow-sm max-w-full"
-                    title={loc.name} 
+                    title={loc.name}
                   >
                     <span className="truncate max-w-[150px]">
                       {loc.name.length > 25 ? loc.name.substring(0, 25) + '...' : loc.name}

@@ -1,26 +1,35 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, ChevronDown, Wallet, TrendingUp, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
+import { Search, Filter, Wallet, TrendingUp, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
 import StatsGrid from '@/app/components/StatsGrid';
 import Modal from '@/app/components/ui/Modal';
 import PaymentTable from '@/app/components/features/admin/payments/PaymentTable';
 import PaymentAdvancedSearch from '@/app/components/features/admin/payments/PaymentAdvancedSearch';
 import PaymentDetailModal from '@/app/components/features/admin/payments/PaymentDetailModal';
 import { paymentService, PaymentListItem, PaymentFilters } from '@/lib/api/services/payment.service';
+import { reportService } from '@/lib/api/services/statistic-report.service';
+import { accountService } from '@/lib/api/services/account.service';
 
 export default function PaymentsPage() {
   const [isAdvSearchOpen, setIsAdvSearchOpen] = useState(false);
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
+
   const [payments, setPayments] = useState<PaymentListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalItems, setTotalItems] = useState(0);
   const [keyword, setKeyword] = useState('');
+
   const [filters, setFilters] = useState<PaymentFilters>({
-    page: 0,  // Spring Boot uses 0-based pagination
+    page: 0,
     size: 10,
     sortBy: 'createdAt',
     sortDirection: 'DESC'
+  });
+
+  const [finStats, setFinStats] = useState({
+    totalRevenue: 0,
+    netProfit: 0,
   });
 
   useEffect(() => {
@@ -28,12 +37,52 @@ export default function PaymentsPage() {
       setLoading(true);
       try {
         const res = await paymentService.getPayments(filters);
-        setPayments(res.data);
+        const rawPayments = res.data;
+
+        const userIdsToFetch = new Set<string>();
+        rawPayments.forEach(p => {
+          if (p.payerId) userIdsToFetch.add(p.payerId);
+          if (p.payeeId) userIdsToFetch.add(p.payeeId);
+        });
+
+        const userMap = new Map<string, any>();
+
+        if (userIdsToFetch.size > 0) {
+          await Promise.all(Array.from(userIdsToFetch).map(async (id) => {
+            try {
+              const user = await accountService.getUserById(id);
+              userMap.set(id, user);
+            } catch (e) {
+              console.warn(`Không lấy được thông tin user ID: ${id}`);
+            }
+          }));
+        }
+
+        const enrichedPayments = rawPayments.map(p => {
+          const payerUser = p.payerId ? userMap.get(p.payerId) : null;
+          const payeeUser = p.payeeId ? userMap.get(p.payeeId) : null;
+
+          return {
+            ...p,
+            payerName: payerUser
+              ? `${payerUser.firstName} ${payerUser.lastName}`
+              : (p.payerId ? 'Unknown Payer' : 'System'),
+            payerRole: payerUser ? payerUser.role : (p.payerId ? '---' : 'SYSTEM'),
+            payeeName: payeeUser
+              ? `${payeeUser.firstName} ${payeeUser.lastName}`
+              : (p.payeeId ? 'Unknown Payee' : 'System'),
+            payeeRole: payeeUser ? payeeUser.role : (p.payeeId ? '---' : 'SYSTEM'),
+          };
+        });
+
+        setPayments(enrichedPayments);
+
         if (res.paging) {
           setTotalItems(res.paging.total);
         } else if ((res as any).meta) {
           setTotalItems((res as any).meta.total);
         }
+
       } catch (error) {
         console.error("Failed to fetch payments", error);
       } finally {
@@ -43,15 +92,32 @@ export default function PaymentsPage() {
     fetchData();
   }, [filters]);
 
+  // 2. Fetch Financial Stats
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const currentYear = new Date().getFullYear();
+        const res = await reportService.getFinancialStats(currentYear);
+        if (res) {
+          setFinStats({
+            totalRevenue: res.totalRevenue || 0,
+            netProfit: res.netProfit || 0
+          });
+        }
+      } catch (error) {
+        console.error("Failed to fetch financial stats", error);
+      }
+    };
+    fetchStats();
+  }, []);
+
   const handlePageChange = (page: number) => {
-    setFilters(prev => ({ ...prev, page }));
+    setFilters(prev => ({ ...prev, page: page - 1 }));
   };
 
   const handleApplySearch = (newFilters: PaymentFilters) => {
-    // Don't merge - replace all filters except pagination defaults
-    // Note: Spring Boot uses 0-based page numbering
     setFilters({
-      page: 0,  // Spring Boot starts from 0
+      page: 0,
       size: 10,
       sortBy: 'createdAt',
       sortDirection: 'DESC',
@@ -60,13 +126,52 @@ export default function PaymentsPage() {
     setIsAdvSearchOpen(false);
   };
 
+  const formatVNCurrency = (val: number) => {
+    if (!val) return '0 ₫';
+    if (val >= 1_000_000_000) return `${(val / 1_000_000_000).toFixed(1)}B ₫`;
+    if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(1)}M ₫`;
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
+  };
+
   const statsData = [
-    { title: "Total payments", value: totalItems.toLocaleString(), trend: "", icon: Wallet },
-    { title: "New this month", value: "---", trend: "", icon: Wallet },
-    { title: "Total value", value: "---", trend: "", icon: TrendingUp },
-    { title: "Inflow", value: "---", trend: "", icon: ArrowDownLeft },
-    { title: "Outflow", value: "---", trend: "", icon: ArrowUpRight },
+    { title: "Total transactions", value: totalItems.toLocaleString(), trend: "", icon: Wallet },
+    { title: "Total Revenue", value: formatVNCurrency(finStats.totalRevenue), trend: "+12%", trendUp: true, icon: TrendingUp },
+    { title: "Net Profit", value: formatVNCurrency(finStats.netProfit), trend: "+8%", trendUp: true, icon: ArrowUpRight },
+    { title: "Pending Payouts", value: "---", trend: "", icon: ArrowDownLeft },
   ];
+
+  // --- Reset Filters ---
+  const handleResetFilters = () => {
+    setFilters({
+      page: 0,
+      size: 10,
+      sortBy: 'createdAt',
+      sortDirection: 'DESC'
+    });
+    setKeyword('');
+  };
+
+  // --- Check Advanced Filters ---
+  const hasAdvancedFilters = !!(
+    // Array/String checks 
+    filters.paymentTypes?.length ||
+    filters.statuses?.length ||
+    filters.payerId ||
+    filters.payeeId ||
+    filters.contractId ||
+    filters.propertyId ||
+    filters.agentId ||
+
+    // Date checks
+    filters.dueDateFrom ||
+    filters.dueDateTo ||
+    filters.paidDateFrom ||
+    filters.paidDateTo ||
+
+    // Boolean checks 
+    filters.overdue !== undefined
+  );
+  // ------------------------------------------
 
   return (
     <div className="space-y-6">
@@ -99,31 +204,46 @@ export default function PaymentsPage() {
           >
             <Filter className="w-4 h-4" />
             Advanced Search
-            <span className="bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded ml-1">
-              {Object.keys(filters).length - 4 > 0 ? Object.keys(filters).length - 4 : 0}
-            </span>
           </button>
+
+          {/* --- Filters Summary & Clear --- */}
+          {hasAdvancedFilters && (
+            <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2 duration-300">
+              <span className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded hidden sm:inline-block">
+                {[
+                  filters.paymentTypes?.length && 'Type',
+                  filters.statuses?.length && 'Status',
+                  (filters.payerId || filters.payeeId) && 'User',
+                  (filters.dueDateFrom || filters.dueDateTo) && 'Due Date',
+                  (filters.paidDateFrom || filters.paidDateTo) && 'Paid Date',
+                  filters.overdue !== undefined && 'Overdue'
+                ].filter(Boolean).join(', ')}
+              </span>
+              <button
+                onClick={handleResetFilters}
+                className="text-xs text-red-600 underline hover:text-red-700 whitespace-nowrap"
+              >
+                Clear all
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
       <PaymentTable
         data={payments}
         loading={loading}
-        currentPage={filters.page || 1}
+        currentPage={(filters.page || 0) + 1}
         itemsPerPage={filters.size || 10}
         totalItems={totalItems}
         onPageChange={handlePageChange}
         onViewDetail={(id) => setSelectedPaymentId(id)}
       />
 
-      <Modal
-        isOpen={isAdvSearchOpen}
-        onClose={() => setIsAdvSearchOpen(false)}
-        title="Advanced Search"
-      >
+      <Modal isOpen={isAdvSearchOpen} onClose={() => setIsAdvSearchOpen(false)} title="Advanced Search">
         <PaymentAdvancedSearch
           onApply={handleApplySearch}
-          onReset={() => setFilters({ page: 0, size: 10, sortBy: 'createdAt', sortDirection: 'DESC' })}
+          onReset={handleResetFilters}
           onClose={() => setIsAdvSearchOpen(false)}
         />
       </Modal>

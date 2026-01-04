@@ -95,13 +95,6 @@ export default function AgentSalaryTab({ agentId, month, year }: AgentSalaryTabP
                 </div>
             </div>
 
-            {/* (Optional) Bảng lịch sử thanh toán chi tiết có thể đặt ở đây */}
-            {/* <div className="mt-8">
-                <h3 className="font-bold text-gray-900 text-sm mb-4">Payment History</h3>
-                ... Table component here ...
-            </div> 
-            */}
-
             <CreatePaymentModal
                 isOpen={isPayModalOpen}
                 onClose={() => setIsPayModalOpen(false)}
