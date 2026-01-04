@@ -57,6 +57,8 @@ const roleMenuItems: Record<UserRole, MenuItem[]> = {
     { href: '/agent/appointments', label: 'Appointments', icon: Calendar },
     { href: '/agent/customers', label: 'Customers', icon: Users },
     { href: '/my/contracts', label: 'Contracts', icon: FileText },
+    { href: '/agent/payouts', label: 'Payouts', icon: Wallet },
+    { href: '/my/reports', label: 'Reports', icon: AlertTriangle },
   ],
   ACCOUNTANT: [
     { href: '/accountant/dashboard', label: 'Dashboard', icon: LayoutDashboard },

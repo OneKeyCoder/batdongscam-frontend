@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Building, MapPin, Bed, Bath, Square, Heart, Share2, Phone, Mail, Calendar, ChevronLeft, ChevronRight, Star, User, Check, Clock, Shield, Menu, X, Loader2, AlertCircle, Edit, FileText, Trash2, Eye, Download } from 'lucide-react';
+import { Building, MapPin, Bed, Bath, Square, Heart, Share2, Phone, Mail, Calendar, ChevronLeft, ChevronRight, Star, User, Check, Clock, Shield, Menu, X, Loader2, AlertCircle, Edit, FileText, Trash2, Eye, Download, AlertTriangle } from 'lucide-react';
 import NavBar from '@/app/components/layout/NavBar';
 import Modal from '@/app/components/ui/Modal';
 import Footer from '@/app/components/layout/Footer';
@@ -36,6 +36,7 @@ export default function PropertyDetailPage() {
   });
   const [isBooking, setIsBooking] = useState(false);
   const [bookingError, setBookingError] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
   const [bookingSuccess, setBookingSuccess] = useState(false);
 
   // Fetch property details
@@ -204,6 +205,17 @@ export default function PropertyDetailPage() {
             >
               <Heart className={`w-5 h-5 ${isFavorite ? 'fill-red-500 text-red-500' : 'text-gray-600'}`} />
             </button>
+
+            {/* Report a Violation - visible to logged in users (except owner) */}
+            {user && user.id !== property.owner.id && (
+              <Link
+                href={`/my/reports?type=Property&targetId=${property.id}`}
+                className="w-10 h-10 bg-white rounded-full flex items-center justify-center hover:bg-yellow-50 transition-colors shadow-lg group"
+                title="Report a Violation"
+              >
+                <AlertTriangle className="w-5 h-5 text-gray-600 group-hover:text-yellow-600" />
+              </Link>
+            )}
             
             {/* Edit & Delete - Only for owner */}
             {user && user.id === property.owner.id && (
@@ -215,15 +227,22 @@ export default function PropertyDetailPage() {
                   <Edit className="w-5 h-5 text-gray-600" />
                 </Link>
                 <button
-                  onClick={() => {
-                    if (confirm('Are you sure you want to delete this property?')) {
-                      // TODO: Call delete API
-                      alert('Property deleted!');
+                  onClick={async () => {
+                    if (!confirm('Are you sure you want to delete this property?')) return;
+                    setIsDeleting(true);
+                    try {
+                      await propertyService.deleteProperty(property.id);
+                      window.location.href = '/my/properties';
+                    } catch (err: any) {
+                      alert(err.response?.data?.message || 'Failed to delete property');
+                    } finally {
+                      setIsDeleting(false);
                     }
                   }}
-                  className="w-10 h-10 bg-white rounded-full flex items-center justify-center hover:bg-red-50 transition-colors shadow-lg group"
+                  disabled={isDeleting}
+                  className="w-10 h-10 bg-white rounded-full flex items-center justify-center hover:bg-red-50 transition-colors shadow-lg group disabled:opacity-50"
                 >
-                  <Trash2 className="w-5 h-5 text-gray-600 group-hover:text-red-600" />
+                  {isDeleting ? <Loader2 className="w-5 h-5 animate-spin text-gray-600" /> : <Trash2 className="w-5 h-5 text-gray-600 group-hover:text-red-600" />}
                 </button>
               </>
             )}
@@ -232,9 +251,9 @@ export default function PropertyDetailPage() {
           {/* Type Badge */}
           <div className="absolute top-4 left-4">
             <span className={`px-4 py-2 text-sm font-bold rounded-full ${
-              property.transactionType === 'SALE' ? 'bg-green-500 text-white' : 'bg-blue-500 text-white'
+              property.transactionType === 'SALE' ? 'bg-red-600 text-white' : 'bg-blue-600 text-white'
             }`}>
-              For {property.transactionType === 'SALE' ? 'Sale' : 'Rent'}
+              FOR {property.transactionType === 'SALE' ? 'SALE' : 'RENT'}
             </span>
           </div>
         </div>

@@ -81,6 +81,13 @@ export const notificationService = {
   },
 
   /**
+   * Alias for getMyNotifications (backward compatibility)
+   */
+  async getNotifications(page: number = 1, limit: number = 20): Promise<PaginatedResponse<NotificationItem>> {
+    return this.getMyNotifications({ page, limit });
+  },
+
+  /**
    * Lấy chi tiết thông báo
    */
   async getNotificationById(id: string): Promise<NotificationDetails> {
@@ -88,6 +95,13 @@ export const notificationService = {
       NOTIFICATION_ENDPOINTS.DETAILS(id)
     );
     return response.data.data;
+  },
+
+  /**
+   * Alias for getNotificationById (backward compatibility)
+   */
+  async getNotificationDetails(id: string): Promise<NotificationDetails> {
+    return this.getNotificationById(id);
   },
 
   /**

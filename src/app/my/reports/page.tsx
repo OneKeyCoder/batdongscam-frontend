@@ -1,170 +1,215 @@
 'use client';
 
-import React, { useState } from 'react';
-import { AlertTriangle, Plus, Eye, FileText, Shield, User, Building, Clock, Check, X, ChevronRight, MessageSquare, Upload } from 'lucide-react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { AlertTriangle, Plus, Eye, Shield, User, Building, Clock, Check, X, MessageSquare, Upload, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import Badge from '@/app/components/ui/Badge';
 import Modal from '@/app/components/ui/Modal';
+import { violationService, ViolationUserItem, ViolationUserDetails, ViolationCreateRequest } from '@/lib/api/services/violation.service';
 
-type ReportStatus = 'Pending' | 'Under Review' | 'Resolved' | 'Rejected';
-type ReportType = 'Property' | 'User' | 'Agent';
+type ReportStatus = 'PENDING' | 'REPORTED' | 'UNDER_REVIEW' | 'RESOLVED' | 'DISMISSED';
+type ViolationType = 'FRAUDULENT_LISTING' | 'MISREPRESENTATION_OF_PROPERTY' | 'SPAM_OR_DUPLICATE_LISTING' |
+  'INAPPROPRIATE_CONTENT' | 'NON_COMPLIANCE_WITH_TERMS' | 'FAILURE_TO_DISCLOSE_INFORMATION' |
+  'HARASSMENT' | 'SCAM_ATTEMPT';
+type ReportedType = 'CUSTOMER' | 'PROPERTY' | 'SALES_AGENT' | 'PROPERTY_OWNER';
 
-interface Report {
-  id: number;
-  reportNumber: string;
-  type: ReportType;
-  targetName: string;
-  targetId: string;
-  reason: string;
-  description: string;
-  status: ReportStatus;
-  createdAt: string;
-  updatedAt: string;
-  hasAppeal: boolean;
-  penaltyDetails: string | null;
-}
+// UI type for report creation form
+type UIReportType = 'Property' | 'User' | 'Agent';
 
-// Mock data
-const mockReports: Report[] = [
-  {
-    id: 1,
-    reportNumber: 'RPT-2024-001',
-    type: 'Property',
-    targetName: 'Fake Luxury Villa Listing',
-    targetId: 'PROP-2024-123',
-    reason: 'Fraudulent listing',
-    description: 'This property listing contains fake images and misleading information about the property size and location.',
-    status: 'Under Review',
-    createdAt: '2024-01-15',
-    updatedAt: '2024-01-18',
-    hasAppeal: false,
-    penaltyDetails: null,
-  },
-  {
-    id: 2,
-    reportNumber: 'RPT-2024-002',
-    type: 'User',
-    targetName: 'Nguyễn Văn Scammer',
-    targetId: 'USR-2024-456',
-    reason: 'Scam behavior',
-    description: 'This user asked for advance payment outside the platform and provided fake contract documents.',
-    status: 'Resolved',
-    createdAt: '2024-01-10',
-    updatedAt: '2024-01-14',
-    hasAppeal: false,
-    penaltyDetails: 'Account suspended for 30 days',
-  },
-  {
-    id: 3,
-    reportNumber: 'RPT-2024-003',
-    type: 'Agent',
-    targetName: 'Trần Văn BadAgent',
-    targetId: 'AGT-2024-789',
-    reason: 'Unprofessional conduct',
-    description: 'Agent did not show up for scheduled viewing and was rude when contacted.',
-    status: 'Pending',
-    createdAt: '2024-01-20',
-    updatedAt: '2024-01-20',
-    hasAppeal: false,
-    penaltyDetails: null,
-  },
-  {
-    id: 4,
-    reportNumber: 'RPT-2023-050',
-    type: 'Property',
-    targetName: 'Overpriced Studio',
-    targetId: 'PROP-2023-999',
-    reason: 'Price manipulation',
-    description: 'Owner keeps changing the price after agreement.',
-    status: 'Rejected',
-    createdAt: '2023-12-20',
-    updatedAt: '2023-12-25',
-    hasAppeal: true,
-    penaltyDetails: null,
-  },
+const reportTypes: { value: UIReportType; label: string; icon: React.ElementType; backendType: ReportedType }[] = [
+  { value: 'Property', label: 'Property', icon: Building, backendType: 'PROPERTY' },
+  { value: 'User', label: 'User (Owner/Customer)', icon: User, backendType: 'CUSTOMER' },
+  { value: 'Agent', label: 'Sales Agent', icon: Shield, backendType: 'SALES_AGENT' },
 ];
 
-const reportTypes = [
-  { value: 'Property' as ReportType, label: 'Property', icon: Building },
-  { value: 'User' as ReportType, label: 'User (Owner/Customer)', icon: User },
-  { value: 'Agent' as ReportType, label: 'Sales Agent', icon: Shield },
+const violationTypes: { value: ViolationType; label: string }[] = [
+  { value: 'FRAUDULENT_LISTING', label: 'Fraudulent Listing' },
+  { value: 'MISREPRESENTATION_OF_PROPERTY', label: 'Misrepresentation of Property' },
+  { value: 'SPAM_OR_DUPLICATE_LISTING', label: 'Spam or Duplicate Listing' },
+  { value: 'INAPPROPRIATE_CONTENT', label: 'Inappropriate Content' },
+  { value: 'NON_COMPLIANCE_WITH_TERMS', label: 'Non-Compliance with Terms' },
+  { value: 'FAILURE_TO_DISCLOSE_INFORMATION', label: 'Failure to Disclose Information' },
+  { value: 'HARASSMENT', label: 'Harassment' },
+  { value: 'SCAM_ATTEMPT', label: 'Scam Attempt' },
 ];
 
-const reportReasons: Record<ReportType, string[]> = {
-  Property: ['Fraudulent listing', 'Misleading information', 'Price manipulation', 'Unavailable property', 'Other'],
-  User: ['Scam behavior', 'Fake identity', 'Payment fraud', 'Harassment', 'Other'],
-  Agent: ['Unprofessional conduct', 'No-show', 'Misleading information', 'Bribery request', 'Other'],
+const statusConfig: Record<ReportStatus, { label: string; variant: 'warning' | 'info' | 'success' | 'danger'; icon: React.ElementType }> = {
+  PENDING: { label: 'Pending', variant: 'warning', icon: Clock },
+  REPORTED: { label: 'Reported', variant: 'warning', icon: AlertTriangle },
+  UNDER_REVIEW: { label: 'Under Review', variant: 'info', icon: Eye },
+  RESOLVED: { label: 'Resolved', variant: 'success', icon: Check },
+  DISMISSED: { label: 'Dismissed', variant: 'danger', icon: X },
 };
 
-const statusVariants: Record<ReportStatus, 'warning' | 'info' | 'success' | 'danger'> = {
-  Pending: 'warning',
-  'Under Review': 'info',
-  Resolved: 'success',
-  Rejected: 'danger',
+const formatViolationType = (type: string): string => {
+  return type.split('_').map(word => word.charAt(0) + word.slice(1).toLowerCase()).join(' ');
 };
 
-const statusIcons: Record<ReportStatus, typeof Clock> = {
-  Pending: Clock,
-  'Under Review': Eye,
-  Resolved: Check,
-  Rejected: X,
+const formatDate = (dateString: string): string => {
+  return new Date(dateString).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
 };
 
 export default function ReportsPage() {
-  const [reports, setReports] = useState<Report[]>(mockReports);
-  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+  // Data state
+  const [reports, setReports] = useState<ViolationUserItem[]>([]);
+  const [selectedReportDetails, setSelectedReportDetails] = useState<ViolationUserDetails | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const pageSize = 10;
+
+  // Modal state
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showAppealModal, setShowAppealModal] = useState(false);
+  const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'pending' | 'resolved'>('all');
-  
+
   // Form state
   const [newReport, setNewReport] = useState<{
-    type: ReportType;
+    type: UIReportType;
     targetId: string;
-    reason: string;
+    violationType: ViolationType | '';
     description: string;
   }>({
     type: 'Property',
     targetId: '',
-    reason: '',
+    violationType: '',
     description: '',
   });
-  const [appealText, setAppealText] = useState('');
+  const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const searchParams = useSearchParams();
 
-  const filteredReports = reports.filter(r => {
-    if (filter === 'pending') return r.status === 'Pending' || r.status === 'Under Review';
-    if (filter === 'resolved') return r.status === 'Resolved' || r.status === 'Rejected';
-    return true;
-  });
+  // Check for query params to auto-open modal with prefilled data
+  useEffect(() => {
+    const typeParam = searchParams.get('type');
+    const targetIdParam = searchParams.get('targetId');
+    
+    if (typeParam && targetIdParam) {
+      // Map query param type to UIReportType
+      let uiType: UIReportType = 'Property';
+      if (typeParam === 'User' || typeParam === 'CUSTOMER' || typeParam === 'PROPERTY_OWNER') {
+        uiType = 'User';
+      } else if (typeParam === 'Agent' || typeParam === 'SALES_AGENT') {
+        uiType = 'Agent';
+      }
+      
+      setNewReport(prev => ({
+        ...prev,
+        type: uiType,
+        targetId: targetIdParam,
+      }));
+      setShowCreateModal(true);
+    }
+  }, [searchParams]);
 
-  const handleCreateReport = () => {
-    const newReportItem: Report = {
-      id: reports.length + 1,
-      reportNumber: `RPT-2024-${String(reports.length + 1).padStart(3, '0')}`,
-      type: newReport.type,
-      targetName: `Target ${newReport.targetId}`,
-      targetId: newReport.targetId,
-      reason: newReport.reason,
-      description: newReport.description,
-      status: 'Pending',
-      createdAt: new Date().toISOString().split('T')[0],
-      updatedAt: new Date().toISOString().split('T')[0],
-      hasAppeal: false,
-      penaltyDetails: null,
-    };
-    setReports([newReportItem, ...reports]);
-    setShowCreateModal(false);
-    setNewReport({ type: 'Property', targetId: '', reason: '', description: '' });
-  };
+  // Fetch reports on mount and when page changes
+  useEffect(() => {
+    fetchReports();
+  }, [currentPage]);
 
-  const handleSubmitAppeal = () => {
-    if (selectedReport) {
-      setReports(reports.map(r => 
-        r.id === selectedReport.id ? { ...r, hasAppeal: true } : r
-      ));
-      setShowAppealModal(false);
-      setAppealText('');
+  const fetchReports = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await violationService.getMyViolations({
+        page: currentPage,
+        limit: pageSize,
+        sortType: 'desc',
+        sortBy: 'createdAt',
+      });
+      setReports(response.data);
+      setTotalPages(response.paging?.totalPages || 1);
+      setTotalItems(response.paging?.total || 0);
+    } catch (err) {
+      console.error('Error fetching reports:', err);
+      setError('Failed to load reports. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
+
+  const fetchReportDetails = async (id: string) => {
+    try {
+      setDetailsLoading(true);
+      setSelectedReportId(id);
+      const details = await violationService.getMyViolationDetails(id);
+      setSelectedReportDetails(details);
+    } catch (err) {
+      console.error('Error fetching report details:', err);
+      setError('Failed to load report details.');
+    } finally {
+      setDetailsLoading(false);
+    }
+  };
+
+  const handleCreateReport = async () => {
+    if (!newReport.violationType || !newReport.targetId || !newReport.description) {
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      setError(null);
+
+      const reportedType = reportTypes.find(t => t.value === newReport.type)?.backendType || 'PROPERTY';
+
+      const request: ViolationCreateRequest = {
+        violationType: newReport.violationType as ViolationType,
+        description: newReport.description,
+        violationReportedType: reportedType,
+        reportedId: newReport.targetId,
+      };
+
+      await violationService.createViolationReport(request, evidenceFiles.length > 0 ? evidenceFiles : undefined);
+
+      // Reset form and close modal
+      setNewReport({ type: 'Property', targetId: '', violationType: '', description: '' });
+      setEvidenceFiles([]);
+      setShowCreateModal(false);
+
+      // Refresh reports list
+      setCurrentPage(1);
+      fetchReports();
+    } catch (err) {
+      console.error('Error creating report:', err);
+      setError('Failed to create report. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files);
+      setEvidenceFiles(prev => [...prev, ...files]);
+    }
+  };
+
+  const removeFile = (index: number) => {
+    setEvidenceFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const closeDetailsModal = () => {
+    setSelectedReportId(null);
+    setSelectedReportDetails(null);
+  };
+
+  // Filter reports based on status
+  const filteredReports = reports.filter(r => {
+    if (filter === 'pending') return r.status === 'PENDING' || r.status === 'REPORTED' || r.status === 'UNDER_REVIEW';
+    if (filter === 'resolved') return r.status === 'RESOLVED' || r.status === 'DISMISSED';
+    return true;
+  });
 
   return (
     <div className="space-y-6">
@@ -188,6 +233,14 @@ export default function ReportsPage() {
           Create Report
         </button>
       </div>
+
+      {/* Error Message */}
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          {error}
+          <button onClick={() => setError(null)} className="ml-2 underline">Dismiss</button>
+        </div>
+      )}
 
       {/* Filter */}
       <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1 w-fit">
@@ -219,77 +272,103 @@ export default function ReportsPage() {
 
       {/* Reports List */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
-            <thead className="text-xs text-gray-700 uppercase bg-gray-50 border-b">
-              <tr>
-                <th className="px-6 py-4 font-medium">Report</th>
-                <th className="px-6 py-4 font-medium">Type</th>
-                <th className="px-6 py-4 font-medium">Target</th>
-                <th className="px-6 py-4 font-medium">Status</th>
-                <th className="px-6 py-4 font-medium">Date</th>
-                <th className="px-6 py-4 font-medium text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filteredReports.map((report) => {
-                const StatusIcon = statusIcons[report.status];
-                return (
-                  <tr key={report.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div>
-                        <p className="font-medium text-gray-900">{report.reportNumber}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">{report.reason}</p>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        {report.type === 'Property' && <Building className="w-4 h-4 text-gray-400" />}
-                        {report.type === 'User' && <User className="w-4 h-4 text-gray-400" />}
-                        {report.type === 'Agent' && <Shield className="w-4 h-4 text-gray-400" />}
-                        <span className="text-gray-900">{report.type}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="text-gray-900 font-medium">{report.targetName}</p>
-                      <p className="text-xs text-gray-500">{report.targetId}</p>
-                    </td>
-                    <td className="px-6 py-4">
-                      <Badge variant={statusVariants[report.status]}>
-                        <StatusIcon className="w-3 h-3 mr-1" />
-                        {report.status}
-                      </Badge>
-                      {report.hasAppeal && (
-                        <p className="text-xs text-blue-600 mt-1">Appeal submitted</p>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="text-gray-600">{report.createdAt}</p>
-                      <p className="text-xs text-gray-400">Updated: {report.updatedAt}</p>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <button
-                        onClick={() => setSelectedReport(report)}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      >
-                        <Eye className="w-4 h-4" />
-                        View
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Empty State */}
-        {filteredReports.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16">
-            <AlertTriangle className="w-16 h-16 text-gray-300 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No reports found</h3>
-            <p className="text-gray-500 text-sm">You haven't submitted any reports yet</p>
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="w-8 h-8 text-red-600 animate-spin" />
           </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs text-gray-700 uppercase bg-gray-50 border-b">
+                  <tr>
+                    <th className="px-6 py-4 font-medium">Violation Type</th>
+                    <th className="px-6 py-4 font-medium">Target</th>
+                    <th className="px-6 py-4 font-medium">Status</th>
+                    <th className="px-6 py-4 font-medium">Date</th>
+                    <th className="px-6 py-4 font-medium text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filteredReports.map((report) => {
+                    const status = statusConfig[report.status as ReportStatus] || statusConfig.PENDING;
+                    const StatusIcon = status.icon;
+                    return (
+                      <tr key={report.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4">
+                          <div>
+                            <p className="font-medium text-gray-900">{formatViolationType(report.violationType)}</p>
+                            <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{report.description}</p>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="text-gray-900 font-medium">{report.targetName}</p>
+                        </td>
+                        <td className="px-6 py-4">
+                          <Badge variant={status.variant}>
+                            <StatusIcon className="w-3 h-3 mr-1" />
+                            {status.label}
+                          </Badge>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="text-gray-600">{formatDate(report.reportedAt)}</p>
+                          {report.resolvedAt && (
+                            <p className="text-xs text-gray-400">Resolved: {formatDate(report.resolvedAt)}</p>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <button
+                            onClick={() => fetchReportDetails(report.id)}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          >
+                            <Eye className="w-4 h-4" />
+                            View
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Empty State */}
+            {filteredReports.length === 0 && !loading && (
+              <div className="flex flex-col items-center justify-center py-16">
+                <AlertTriangle className="w-16 h-16 text-gray-300 mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No reports found</h3>
+                <p className="text-gray-500 text-sm">You haven't submitted any reports yet</p>
+              </div>
+            )}
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100">
+                <p className="text-sm text-gray-600">
+                  Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalItems)} of {totalItems} reports
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <span className="text-sm text-gray-600">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -309,14 +388,14 @@ export default function ReportsPage() {
                   <button
                     key={type.value}
                     type="button"
-                    onClick={() => setNewReport({ ...newReport, type: type.value as any, reason: '' })}
+                    onClick={() => setNewReport({ ...newReport, type: type.value })}
                     className={`p-3 rounded-lg border text-center transition-all ${
                       newReport.type === type.value
                         ? 'border-red-500 bg-red-50 text-red-700'
-                        : 'border-gray-200 hover:border-gray-300'
+                        : 'border-gray-200 hover:border-gray-300 text-gray-700'
                     }`}
                   >
-                    <type.icon className="w-5 h-5 mx-auto mb-1" />
+                    <type.icon className={`w-5 h-5 mx-auto mb-1 ${newReport.type === type.value ? 'text-red-600' : 'text-gray-500'}`} />
                     <span className="text-xs font-medium">{type.label}</span>
                   </button>
                 ))}
@@ -332,49 +411,80 @@ export default function ReportsPage() {
                 type="text"
                 value={newReport.targetId}
                 onChange={(e) => setNewReport({ ...newReport, targetId: e.target.value })}
-                placeholder={`Enter ${newReport.type.toLowerCase()} ID or URL`}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-sm"
+                placeholder={`Enter ${newReport.type.toLowerCase()} ID`}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-sm text-gray-900"
                 required
               />
             </div>
 
-            {/* Reason */}
+            {/* Violation Type */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Reason</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Violation Type</label>
               <select
-                value={newReport.reason}
-                onChange={(e) => setNewReport({ ...newReport, reason: e.target.value })}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-sm"
+                value={newReport.violationType}
+                onChange={(e) => setNewReport({ ...newReport, violationType: e.target.value as ViolationType })}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-sm text-gray-900"
                 required
               >
-                <option value="">Select a reason</option>
-                {reportReasons[newReport.type].map((reason) => (
-                  <option key={reason} value={reason}>{reason}</option>
+                <option value="">Select a violation type</option>
+                {violationTypes.map((type) => (
+                  <option key={type.value} value={type.value}>{type.label}</option>
                 ))}
               </select>
             </div>
 
             {/* Description */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Description (10-1000 characters)</label>
               <textarea
                 value={newReport.description}
                 onChange={(e) => setNewReport({ ...newReport, description: e.target.value })}
                 placeholder="Provide detailed information about the violation..."
                 rows={4}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-sm resize-none"
+                minLength={10}
+                maxLength={1000}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-sm resize-none text-gray-900"
                 required
               />
+              <p className="text-xs text-gray-500 mt-1">{newReport.description.length}/1000 characters</p>
             </div>
 
             {/* Evidence Upload */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Evidence (Optional)</label>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors cursor-pointer">
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors cursor-pointer"
+              >
                 <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                 <p className="text-sm text-gray-500">Click or drag files to upload</p>
                 <p className="text-xs text-gray-400 mt-1">PNG, JPG, PDF up to 10MB</p>
               </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,.pdf"
+                multiple
+                onChange={handleFileChange}
+                className="hidden"
+              />
+              {/* File List */}
+              {evidenceFiles.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {evidenceFiles.map((file, index) => (
+                    <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                      <span className="text-sm text-gray-700 truncate">{file.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeFile(index)}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Actions */}
@@ -383,13 +493,16 @@ export default function ReportsPage() {
                 type="button"
                 onClick={() => setShowCreateModal(false)}
                 className="flex-1 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                disabled={submitting}
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="flex-1 py-2.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+                disabled={submitting || !newReport.violationType || !newReport.targetId || newReport.description.length < 10}
+                className="flex-1 py-2.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
+                {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
                 Submit Report
               </button>
             </div>
@@ -398,137 +511,108 @@ export default function ReportsPage() {
       )}
 
       {/* Report Details Modal */}
-      {selectedReport && !showAppealModal && (
+      {selectedReportId && (
         <Modal
-          isOpen={!!selectedReport}
-          onClose={() => setSelectedReport(null)}
+          isOpen={!!selectedReportId}
+          onClose={closeDetailsModal}
           title="Report Details"
         >
-          <div className="space-y-4">
-            {/* Status Banner */}
-            <div className={`p-4 rounded-lg flex items-center gap-3 ${
-              selectedReport.status === 'Resolved' ? 'bg-green-50 border border-green-200' :
-              selectedReport.status === 'Rejected' ? 'bg-red-50 border border-red-200' :
-              selectedReport.status === 'Under Review' ? 'bg-blue-50 border border-blue-200' :
-              'bg-yellow-50 border border-yellow-200'
-            }`}>
-              {React.createElement(statusIcons[selectedReport.status], {
-                className: `w-5 h-5 ${
-                  selectedReport.status === 'Resolved' ? 'text-green-600' :
-                  selectedReport.status === 'Rejected' ? 'text-red-600' :
-                  selectedReport.status === 'Under Review' ? 'text-blue-600' :
-                  'text-yellow-600'
-                }`
-              })}
+          {detailsLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 text-red-600 animate-spin" />
+            </div>
+          ) : selectedReportDetails ? (
+            <div className="space-y-4">
+              {/* Status Banner */}
+              {(() => {
+                const status = statusConfig[selectedReportDetails.status as ReportStatus] || statusConfig.PENDING;
+                const StatusIcon = status.icon;
+                return (
+                  <div className={`p-4 rounded-lg flex items-center gap-3 ${
+                    status.variant === 'success' ? 'bg-green-50 border border-green-200' :
+                    status.variant === 'danger' ? 'bg-red-50 border border-red-200' :
+                    status.variant === 'info' ? 'bg-blue-50 border border-blue-200' :
+                    'bg-yellow-50 border border-yellow-200'
+                  }`}>
+                    <StatusIcon className={`w-5 h-5 ${
+                      status.variant === 'success' ? 'text-green-600' :
+                      status.variant === 'danger' ? 'text-red-600' :
+                      status.variant === 'info' ? 'text-blue-600' :
+                      'text-yellow-600'
+                    }`} />
+                    <div>
+                      <p className="font-medium text-gray-900">{status.label}</p>
+                      <p className="text-xs text-gray-600 mt-0.5">
+                        Reported: {formatDate(selectedReportDetails.reportedAt)}
+                        {selectedReportDetails.resolvedAt && ` • Resolved: ${formatDate(selectedReportDetails.resolvedAt)}`}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Report Info */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-3 bg-gray-50 rounded-lg">
+                  <p className="text-xs text-gray-500">Violation Type</p>
+                  <p className="font-medium text-gray-900">{formatViolationType(selectedReportDetails.violationType)}</p>
+                </div>
+                <div className="p-3 bg-gray-50 rounded-lg">
+                  <p className="text-xs text-gray-500">Target</p>
+                  <p className="font-medium text-gray-900">{selectedReportDetails.targetName}</p>
+                </div>
+              </div>
+
+              {/* Description */}
               <div>
-                <p className="font-medium text-gray-900">{selectedReport.status}</p>
-                <p className="text-xs text-gray-600 mt-0.5">Last updated: {selectedReport.updatedAt}</p>
+                <p className="text-xs text-gray-500 mb-1">Description</p>
+                <p className="text-sm text-gray-600 p-3 bg-gray-50 rounded-lg">{selectedReportDetails.description}</p>
               </div>
+
+              {/* Evidence URLs */}
+              {selectedReportDetails.evidenceUrls && selectedReportDetails.evidenceUrls.length > 0 && (
+                <div>
+                  <p className="text-xs text-gray-500 mb-2">Evidence Files</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {selectedReportDetails.evidenceUrls.map((url, index) => (
+                      <a
+                        key={index}
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="aspect-square bg-gray-100 rounded-lg overflow-hidden hover:opacity-80 transition-opacity"
+                      >
+                        <img src={url} alt={`Evidence ${index + 1}`} className="w-full h-full object-cover" />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Penalty Applied */}
+              {selectedReportDetails.penaltyApplied && (
+                <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-xs text-red-600 font-medium mb-1">Penalty Applied</p>
+                  <p className="text-sm text-red-800">{selectedReportDetails.penaltyApplied.replace(/_/g, ' ')}</p>
+                </div>
+              )}
+
+              {/* Resolution Notes */}
+              {selectedReportDetails.resolutionNotes && (
+                <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <p className="text-xs text-green-600 font-medium mb-1 flex items-center gap-1">
+                    <MessageSquare className="w-3 h-3" />
+                    Resolution Notes
+                  </p>
+                  <p className="text-sm text-green-800">{selectedReportDetails.resolutionNotes}</p>
+                </div>
+              )}
             </div>
-
-            {/* Report Info */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-3 bg-gray-50 rounded-lg">
-                <p className="text-xs text-gray-500">Report Number</p>
-                <p className="font-medium text-gray-900">{selectedReport.reportNumber}</p>
-              </div>
-              <div className="p-3 bg-gray-50 rounded-lg">
-                <p className="text-xs text-gray-500">Report Type</p>
-                <p className="font-medium text-gray-900">{selectedReport.type}</p>
-              </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              Failed to load report details.
             </div>
-
-            {/* Target */}
-            <div className="p-4 border rounded-lg">
-              <p className="text-xs text-gray-500 mb-1">Reported Target</p>
-              <p className="font-medium text-gray-900">{selectedReport.targetName}</p>
-              <p className="text-sm text-gray-500">{selectedReport.targetId}</p>
-            </div>
-
-            {/* Reason & Description */}
-            <div>
-              <p className="text-xs text-gray-500 mb-1">Reason</p>
-              <p className="font-medium text-gray-900 mb-3">{selectedReport.reason}</p>
-              <p className="text-xs text-gray-500 mb-1">Description</p>
-              <p className="text-sm text-gray-600 p-3 bg-gray-50 rounded-lg">{selectedReport.description}</p>
-            </div>
-
-            {/* Penalty Details */}
-            {selectedReport.penaltyDetails && (
-              <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-xs text-red-600 font-medium mb-1">Penalty Applied</p>
-                <p className="text-sm text-red-800">{selectedReport.penaltyDetails}</p>
-              </div>
-            )}
-
-            {/* Appeal Section */}
-            {selectedReport.status === 'Rejected' && !selectedReport.hasAppeal && (
-              <div className="pt-4 border-t">
-                <button
-                  onClick={() => setShowAppealModal(true)}
-                  className="w-full py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center justify-center gap-2"
-                >
-                  <MessageSquare className="w-4 h-4" />
-                  Submit Appeal
-                </button>
-              </div>
-            )}
-
-            {selectedReport.hasAppeal && (
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-sm text-blue-800 flex items-center gap-2">
-                  <Check className="w-4 h-4" />
-                  Appeal has been submitted and is under review
-                </p>
-              </div>
-            )}
-          </div>
-        </Modal>
-      )}
-
-      {/* Appeal Modal */}
-      {showAppealModal && selectedReport && (
-        <Modal
-          isOpen={showAppealModal}
-          onClose={() => setShowAppealModal(false)}
-          title="Submit Appeal"
-        >
-          <form onSubmit={(e) => { e.preventDefault(); handleSubmitAppeal(); }} className="space-y-4">
-            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <p className="text-sm text-yellow-800">
-                You are appealing the decision on report <strong>{selectedReport.reportNumber}</strong>. 
-                Please provide additional information to support your case.
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Appeal Reason</label>
-              <textarea
-                value={appealText}
-                onChange={(e) => setAppealText(e.target.value)}
-                placeholder="Explain why you believe the decision should be reconsidered..."
-                rows={4}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm resize-none"
-                required
-              />
-            </div>
-
-            <div className="flex gap-3 pt-4">
-              <button
-                type="button"
-                onClick={() => setShowAppealModal(false)}
-                className="flex-1 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="flex-1 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
-              >
-                Submit Appeal
-              </button>
-            </div>
-          </form>
+          )}
         </Modal>
       )}
     </div>
