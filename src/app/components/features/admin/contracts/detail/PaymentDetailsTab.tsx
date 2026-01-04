@@ -26,7 +26,7 @@ export default function PaymentDetailsTab({ data, isEditing, editData, onEditCha
     const formatCurrency = (val?: number) => val !== undefined ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val) : '---';
 
     const total = data.totalContractAmount || 0;
-    const paid = 8000000000;
+    const paid = data.totalPaymentsMade; 
     const remaining = total - paid;
     const progress = total > 0 ? Math.round((paid / total) * 100) : 0;
 
@@ -66,7 +66,6 @@ export default function PaymentDetailsTab({ data, isEditing, editData, onEditCha
 
                     {/* Col 2 */}
                     <div className="space-y-6">
-                        {/* EDITABLE: PENALTY RATE */}
                         {isEditing ? (
                             <div className="flex items-start gap-3">
                                 <div className="mt-0.5 text-gray-500"><Percent className="w-4 h-4" /></div>
@@ -74,9 +73,16 @@ export default function PaymentDetailsTab({ data, isEditing, editData, onEditCha
                                     <p className="text-xs text-gray-500 mb-0.5">Late Payment Penalty Rate (%)</p>
                                     <input
                                         type="number"
+                                        min="0" 
+                                        step="0.01"
                                         className="border border-gray-300 rounded px-2 py-1 text-sm font-bold w-full focus:border-red-500 outline-none"
                                         value={editData?.latePaymentPenaltyRate}
-                                        onChange={(e) => onEditChange?.({ ...editData, latePaymentPenaltyRate: e.target.value })}
+                                        onChange={(e) => {
+                                            const val = Number(e.target.value);
+                                            if (val >= 0) {
+                                                onEditChange?.({ ...editData, latePaymentPenaltyRate: e.target.value });
+                                            }
+                                        }}
                                         placeholder="e.g 5"
                                     />
                                 </div>

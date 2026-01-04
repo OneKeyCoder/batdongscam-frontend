@@ -4,7 +4,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { jwtDecode } from 'jwt-decode';
 import { authService } from '@/lib/api/services/auth.service';
 import { accountService } from '@/lib/api/services/account.service';
-import { DecodedToken, RegisterRequest, UserRole, MeResponse } from '@/lib/api/types';
+import { DecodedToken, RegisterRequest, UserRole } from '@/lib/api/types';
 
 interface User {
   id: string;
@@ -60,53 +60,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Initialize auth state on mount
   useEffect(() => {
     const initAuth = async () => {
-      // Prevent multiple simultaneous refresh attempts
       if (isRefreshing) return;
-      
+
       try {
         const accessToken = authService.getAccessToken();
         const refreshToken = authService.getRefreshToken();
         const storedRole = localStorage.getItem('userRole') as UserRole | null;
 
-        // If no tokens, user is not logged in - don't try to fetch profile
         if (!accessToken || !refreshToken) {
           setIsLoading(false);
           return;
         }
 
-        // Fetch full user profile if we have a token
         try {
           const profile = await accountService.getMe();
-          
-          // Check if profile data is valid
+
+          // --- DEBUGGING LOG ---
+          console.log("🔍 [AuthContext] Profile received from API:", profile);
+
           if (profile && profile.id) {
             setUser({
               ...profile,
               role: profile.role as UserRole,
             });
           } else {
-            throw new Error('Invalid profile data received');
+            // Instead of throwing an error, we log a warning and let it fall through to token decoding
+            console.warn("⚠️ [AuthContext] Invalid profile data (missing id). Falling back to token.");
+            throw new Error('Invalid profile data'); // Throw to trigger the catch block below for fallback logic
           }
         } catch (profileError: any) {
           console.error('Failed to fetch profile on init:', profileError);
-          
-          // If it's a 401 (unauthorized), try refresh
+
+          // 1. Handle Token Expiration (401)
           if (profileError?.response?.status === 401) {
             setIsRefreshing(true);
             try {
               const newTokens = await authService.refresh(refreshToken);
               authService.setTokens(newTokens.accessToken, newTokens.refreshToken);
-              
-              // Try fetching profile again with new token
+
+              // Retry fetching profile
               const profile = await accountService.getMe();
-              
               if (profile && profile.id) {
                 setUser({
                   ...profile,
                   role: profile.role as UserRole,
                 });
               } else {
-                throw new Error('Invalid profile data after refresh');
+                // Fallback to token if profile still fails after refresh
+                const decoded = decodeToken(newTokens.accessToken);
+                if (decoded) setUser({ ...decoded, role: storedRole || decoded.role });
               }
             } catch (refreshError) {
               console.error('Token refresh failed:', refreshError);
@@ -116,18 +118,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             } finally {
               setIsRefreshing(false);
             }
-          } else if (profileError?.response?.status === 500) {
-            // If it's a 500 error (backend issue), use token fallback
-            console.warn('Backend error (500), using token fallback');
-            const decoded = decodeToken(accessToken);
-            if (decoded && storedRole) {
-              setUser({
-                ...decoded,
-                role: storedRole,
-              });
-            }
-          } else {
-            // For other errors, try token fallback
+          }
+          // 2. Handle Server Error or Invalid Data (500 or Manual Error)
+          else {
+            console.warn('Using token fallback due to profile fetch error');
             const decoded = decodeToken(accessToken);
             if (decoded && storedRole) {
               setUser({
@@ -135,16 +129,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 role: storedRole,
               });
             } else {
-              // Invalid token, clear everything
-              authService.logout();
-              localStorage.removeItem('userRole');
-              setUser(null);
+              // Only logout if token is truly invalid/un-decodable
+              // Don't logout just because the /me endpoint failed (allow offline access if needed)
+              if (!decoded) {
+                authService.logout();
+                localStorage.removeItem('userRole');
+                setUser(null);
+              }
             }
           }
         }
       } catch (error) {
         console.error('Auth initialization error:', error);
-        // Clear any invalid tokens
         authService.logout();
         localStorage.removeItem('userRole');
         setUser(null);
@@ -154,44 +150,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     initAuth();
-  }, []); // Empty dependency array - only run once on mount
+  }, []);
 
+  // ... (keep login, register, logout functions as is)
   const login = async (email: string, password: string) => {
     try {
       const response = await authService.login({ email, password });
-      
-      // Store tokens
       authService.setTokens(response.token, response.refreshToken);
-      
-      // Store role in localStorage for persistence
       localStorage.setItem('userRole', response.role);
-      
-      // Fetch full user profile
+
       try {
         const profile = await accountService.getMe();
-        setUser({
-          ...profile,
-          role: profile.role as UserRole,
-        });
-        
-        // Redirect admin users to admin dashboard
-        if (profile.role === 'ADMIN') {
+        if (profile && profile.id) {
+          setUser({ ...profile, role: profile.role as UserRole });
+        } else {
+          // Fallback if login profile fetch fails
+          const decoded = decodeToken(response.token);
+          if (decoded) setUser({ ...decoded, role: response.role });
+        }
+
+        if (profile?.role === 'ADMIN' || response.role === 'ADMIN') {
           window.location.href = '/admin/dashboard';
         }
       } catch (profileError) {
-        console.error('Failed to fetch profile:', profileError);
-        // Fallback to basic user info from token
+        console.error('Failed to fetch profile after login:', profileError);
         const decoded = decodeToken(response.token);
         if (decoded) {
-          setUser({
-            ...decoded,
-            role: response.role,
-          });
-          
-          // Redirect admin users to admin dashboard (fallback)
-          if (response.role === 'ADMIN') {
-            window.location.href = '/admin/dashboard';
-          }
+          setUser({ ...decoded, role: response.role });
+          if (response.role === 'ADMIN') window.location.href = '/admin/dashboard';
         }
       }
     } catch (error: any) {
@@ -202,7 +188,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (data: RegisterRequest) => {
     const response = await authService.register(data);
-    // Auto-login after successful registration
     authService.setTokens(response.token, response.refreshToken);
     localStorage.setItem('userRole', response.role);
     setUser({
@@ -221,17 +206,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isAuthenticated: !!user,
-        isLoading,
-        login,
-        register,
-        logout,
-        setUser,
-      }}
-    >
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, register, logout, setUser }}>
       {children}
     </AuthContext.Provider>
   );

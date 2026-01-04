@@ -17,7 +17,7 @@ export default function CreatePaymentModal({ isOpen, onClose, agentId, onSuccess
     const [loading, setLoading] = useState(false);
 
     const handleSubmit = async () => {
-        const numAmount = Number(amount); // Convert string to number
+        const numAmount = Number(amount); 
 
         if (!amount || isNaN(numAmount) || numAmount <= 0) {
             alert("Amount must be a positive number.");

@@ -6,6 +6,7 @@ import { Eye, Loader2, Home, User, AlertCircle } from 'lucide-react';
 import Badge from '@/app/components/ui/Badge';
 import Pagination from '@/app/components/Pagination';
 import { violationService, ViolationAdminItem, AdminViolationFilters } from '@/lib/api/services/violation.service';
+import { getFullUrl } from '@/lib/utils/urlUtils';
 
 interface Props {
   filters: AdminViolationFilters;
@@ -16,7 +17,7 @@ const VIOLATION_DISPLAY_MAP: Record<string, string> = {
   FRAUDULENT_LISTING: 'Fraudulent',
   MISREPRESENTATION_OF_PROPERTY: 'Misrepresentation',
   SPAM_OR_DUPLICATE_LISTING: 'Spam / Duplicate',
-  INAPPROPRIATE_CONTENT: 'Inappropriate Content',
+  INAPPROPRIATE_CONTENT: 'Inappropriate',
   NON_COMPLIANCE_WITH_TERMS: 'Policy Violation',
   FAILURE_TO_DISCLOSE_INFORMATION: 'Hidden Info',
   HARASSMENT: 'Harassment',
@@ -56,30 +57,32 @@ export default function ViolationTable({ filters, onFilterChange }: Props) {
   };
 
   const getShortType = (type: string) => {
-    return VIOLATION_DISPLAY_MAP[type] || type.replace(/_/g, ' '); 
+    return VIOLATION_DISPLAY_MAP[type] || type.replace(/_/g, ' ');
   };
 
   const getStatusVariant = (status: string) => {
     switch (status) {
-      case 'PENDING': return 'warning';    
-      case 'REPORTED': return 'reported';    
-      case 'UNDER_REVIEW': return 'processing';
-      case 'RESOLVED': return 'success';    
-      case 'DISMISSED': return 'default';    
+      case 'PENDING': return 'pending';
+      case 'REPORTED': return 'reported';
+      case 'UNDER_REVIEW': return 'warning'; 
+      case 'RESOLVED': return 'resolved';
+      case 'DISMISSED': return 'gray';
       default: return 'default';
     }
   };
 
   const getTypeVariant = (type: string) => {
     const t = type.toUpperCase();
-    if (t.includes('SCAM') || t.includes('FRAUD')) return 'scam'; 
-    if (t.includes('SPAM') || t.includes('HARASSMENT')) return 'spam'; 
-    return 'default'; 
+    if (t.includes('SCAM') || t.includes('FRAUD')) return 'scam';
+    if (t.includes('SPAM') || t.includes('DUPLICATE')) return 'spam';
+    if (t.includes('HARASSMENT') || t.includes('INAPPROPRIATE')) return 'failed';
+    if (t.includes('NON_COMPLIANCE') || t.includes('POLICY')) return 'penalty';
+    return 'default';
   };
 
   const renderAvatar = (url: string | undefined, name: string, isTarget = false) => {
     if (url) {
-      return <img src={url} className="w-full h-full object-cover" alt="" />;
+      return <img src={getFullUrl(url)} className="w-full h-full object-cover" alt="" onError={(e) => { e.currentTarget.src = `https://ui-avatars.com/api/?name=${name}&background=random` }} />;
     }
     return (
       <div className={`w-full h-full flex items-center justify-center ${isTarget ? 'bg-orange-50 text-orange-600' : 'bg-blue-50 text-blue-600'}`}>
@@ -98,8 +101,11 @@ export default function ViolationTable({ filters, onFilterChange }: Props) {
             <tr>
               <th className="px-6 py-4 font-bold text-gray-900 w-[20%]">Reporter</th>
               <th className="px-6 py-4 font-bold text-gray-900 w-[20%]">Reported Target</th>
-              <th className="px-6 py-4 font-bold text-gray-900 w-[15%]">Violation Type</th>
-              <th className="px-6 py-4 font-bold text-gray-900 w-[10%]">Status</th>
+
+              <th className="px-6 py-4 font-bold text-gray-900 w-[15%] text-center">Violation Type</th>
+
+              <th className="px-6 py-4 font-bold text-gray-900 w-[10%] text-center">Status</th>
+
               <th className="px-6 py-4 font-bold text-gray-900 w-[20%]">Description</th>
               <th className="px-6 py-4 font-bold text-gray-900 w-[10%] text-right">Date</th>
               <th className="px-6 py-4 font-bold text-gray-900 w-[5%]"></th>
@@ -139,16 +145,22 @@ export default function ViolationTable({ filters, onFilterChange }: Props) {
                     </div>
                   </td>
 
-                  {/* Violation Type Badge */}
-                  <td className="px-6 py-4 align-top">
-                    <Badge variant={getTypeVariant(item.violationType) as any} className="whitespace-nowrap shadow-sm">
+                  {/* Violation Type Badge [FIXED] */}
+                  <td className="px-6 py-4 align-top text-center">
+                    <Badge
+                      variant={getTypeVariant(item.violationType) as any}
+                      className="whitespace-nowrap shadow-sm w-[130px] justify-center py-1.5"
+                    >
                       {getShortType(item.violationType)}
                     </Badge>
                   </td>
 
-                  {/* Status Badge */}
-                  <td className="px-6 py-4 align-top">
-                    <Badge variant={getStatusVariant(item.status) as any} className="whitespace-nowrap">
+                  {/* Status Badge [FIXED] */}
+                  <td className="px-6 py-4 align-top text-center">
+                    <Badge
+                      variant={getStatusVariant(item.status) as any}
+                      className="whitespace-nowrap w-[100px] justify-center py-1.5"
+                    >
                       {item.status.replace(/_/g, ' ')}
                     </Badge>
                   </td>

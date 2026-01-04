@@ -1,3 +1,5 @@
+'use client';
+
 import React from 'react';
 import { Eye, Loader2 } from 'lucide-react';
 import Badge from '@/app/components/ui/Badge';
@@ -18,17 +20,39 @@ export default function PaymentTable({
   data, loading, currentPage, itemsPerPage, totalItems, onPageChange, onViewDetail
 }: PaymentTableProps) {
 
-  const getVariant = (val: string) => {
-    const map: Record<string, 'success' | 'pending' | 'failed' | 'warning' | 'gray' | 'blue'> = {
-      'SUCCESS': 'success', 'PAID': 'success',
+  const getStatusVariant = (val: string) => {
+    const map: Record<string, 'success' | 'pending' | 'failed' | 'warning' | 'default'> = {
+      'SUCCESS': 'success',
+      'PAID': 'success',
+      'SYSTEM_SUCCESS': 'success',
+
       'PENDING': 'pending',
-      'FAILED': 'failed', 'CANCELLED': 'failed',
-      'OVERDUE': 'warning',
-      'SALARY': 'blue', 'BONUS': 'blue',
-      'INSTALLMENT': 'gray', 'DEPOSIT': 'gray', 'ADVANCE': 'gray'
+      'SYSTEM_PENDING': 'pending',
+
+      'FAILED': 'failed',
+      'CANCELLED': 'failed',
+      'SYSTEM_FAILED': 'failed',
+
+      'OVERDUE': 'warning'
+    };
+    return map[val] || 'default';
+  };
+
+  const getTypeVariant = (val: string) => {
+    const map: Record<string, any> = {
+      'DEPOSIT': 'deposit',     
+      'FULL_PAY': 'fullpay',      
+      'MONTHLY': 'monthly',     
+      'INSTALLMENT': 'installment', 
+      'SALARY': 'salary',        
+      'BONUS': 'bonus',           
+      'SERVICE_FEE': 'advance',  
+      'PENALTY': 'penalty',     
+      'ADVANCE': 'advance',      
+      'REFUND': 'refund'          
     };
     return map[val] || 'gray';
-  }
+  };
 
   if (loading) {
     return <div className="bg-white border border-gray-200 rounded-xl p-12 flex justify-center"><Loader2 className="w-8 h-8 text-red-600 animate-spin" /></div>;
@@ -41,8 +65,8 @@ export default function PaymentTable({
           <thead className="text-xs text-gray-700 uppercase bg-gray-50 border-b border-gray-200">
             <tr>
               <th className="px-6 py-4 font-bold text-gray-900">Amount</th>
-              <th className="px-6 py-4 font-bold text-gray-900">Type</th>
-              <th className="px-6 py-4 font-bold text-gray-900">Status</th>
+              <th className="px-6 py-4 font-bold text-gray-900 text-center">Type</th>
+              <th className="px-6 py-4 font-bold text-gray-900 text-center">Status</th>
               <th className="px-6 py-4 font-bold text-gray-900">Payer</th>
               <th className="px-6 py-4 font-bold text-gray-900">Payee</th>
               <th className="px-6 py-4 font-bold text-gray-900">Date</th>
@@ -54,20 +78,26 @@ export default function PaymentTable({
               <tr><td colSpan={7} className="text-center py-8">No payments found.</td></tr>
             ) : data.map((item) => (
               <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+                {/* Amount */}
                 <td className="px-6 py-4 font-bold text-gray-900">
-                  {item.amount?.toLocaleString()} VNĐ
+                  {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(item.amount)}
                 </td>
 
                 {/* Type Badge */}
-                <td className="px-6 py-4">
-                  <Badge variant={getVariant(item.paymentType)}>{item.paymentType}</Badge>
+                <td className="px-6 py-4 text-center">
+                  <Badge variant={getTypeVariant(item.paymentType)}>
+                    {item.paymentType.replace(/_/g, ' ')}
+                  </Badge>
                 </td>
 
                 {/* Status Badge */}
-                <td className="px-6 py-4">
-                  <Badge variant={getVariant(item.status)}>{item.status}</Badge>
+                <td className="px-6 py-4 text-center">
+                  <Badge variant={getStatusVariant(item.status) as any}>
+                    {item.status.replace('SYSTEM_', '').replace(/_/g, ' ')}
+                  </Badge>
                 </td>
 
+                {/* Payer */}
                 <td className="px-6 py-4">
                   {item.payerName ? (
                     <div className="flex items-center gap-2">
@@ -75,13 +105,18 @@ export default function PaymentTable({
                         {item.payerName.charAt(0)}
                       </div>
                       <div>
-                        <span className="font-medium text-gray-900 block">{item.payerName}</span>
-                        <span className="text-xs text-gray-400">{item.payerRole}</span>
+                        <span className="font-medium text-gray-900 block text-xs">{item.payerName}</span>
+                        <span className="text-[10px] text-gray-400">{item.payerRole || 'Unknown'}</span>
                       </div>
                     </div>
-                  ) : <span className="text-gray-400">---</span>}
+                  ) : (
+                    <span className="text-gray-400 italic text-xs">
+                      {item.payerId ? `ID: ...${item.payerId.slice(-4)}` : 'System'}
+                    </span>
+                  )}
                 </td>
 
+                {/* Payee */}
                 <td className="px-6 py-4">
                   {item.payeeName ? (
                     <div className="flex items-center gap-2">
@@ -89,20 +124,35 @@ export default function PaymentTable({
                         {item.payeeName.charAt(0)}
                       </div>
                       <div>
-                        <span className="font-medium text-gray-900 block">{item.payeeName}</span>
-                        <span className="text-xs text-gray-400">{item.payeeRole}</span>
+                        <span className="font-medium text-gray-900 block text-xs">{item.payeeName}</span>
+                        <span className="text-[10px] text-gray-400">{item.payeeRole || 'Unknown'}</span>
                       </div>
                     </div>
-                  ) : <span className="text-gray-400">---</span>}
+                  ) : (
+                    <span className="text-gray-400 italic text-xs">
+                      {item.payeeId ? `ID: ...${item.payeeId.slice(-4)}` : 'System'}
+                    </span>
+                  )}
                 </td>
 
-                <td className="px-6 py-4 text-gray-900">
-                  {/* Show Paid Date if success, otherwise Due Date or Created Date */}
-                  {item.paidDate ? new Date(item.paidDate).toLocaleDateString() :
-                    item.dueDate ? `Due: ${new Date(item.dueDate).toLocaleDateString()}` :
-                      new Date(item.createdAt).toLocaleDateString()}
+                {/* Date */}
+                <td className="px-6 py-4 text-gray-900 text-xs">
+                  {item.paidDate ? (
+                    <div>
+                      <span className="text-green-600 font-bold">Paid: </span>
+                      {new Date(item.paidDate).toLocaleDateString()}
+                    </div>
+                  ) : item.dueDate ? (
+                    <div>
+                      <span className="text-orange-500 font-bold">Due: </span>
+                      {new Date(item.dueDate).toLocaleDateString()}
+                    </div>
+                  ) : (
+                    <span className="text-gray-500">{new Date(item.createdAt).toLocaleDateString()}</span>
+                  )}
                 </td>
 
+                {/* Action */}
                 <td className="px-6 py-4 text-right">
                   <button
                     onClick={() => onViewDetail(item.id)}
@@ -116,7 +166,6 @@ export default function PaymentTable({
           </tbody>
         </table>
       </div>
-      {/* Pagination */}
       <Pagination
         currentPage={currentPage}
         totalItems={totalItems}

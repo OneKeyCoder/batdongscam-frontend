@@ -42,26 +42,35 @@ export default function AppointmentTable({ filters, onFilterChange }: Appointmen
     onFilterChange(prev => ({ ...prev, page: pageNumber }));
   };
 
-  // Helper format currency
   const formatCurrency = (amount?: number) => {
     if (!amount) return '---';
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
   };
 
-  // Helper format date
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString('en-US', {
       hour: 'numeric', minute: 'numeric',
-      month: 'long', day: 'numeric', year: 'numeric'
+      month: 'short', day: 'numeric', year: 'numeric' 
     });
   };
 
   const getStatusVariant = (status: string) => {
     switch (status) {
-      case 'CONFIRMED': return 'success';
-      case 'COMPLETED': return 'success';
-      case 'CANCELLED': return 'failed'; 
-      default: return 'pending';
+      case 'PENDING': return 'pending';   
+      case 'CONFIRMED': return 'blue';    
+      case 'COMPLETED': return 'success'; 
+      case 'CANCELLED': return 'red';     
+      default: return 'gray';
+    }
+  };
+
+  const getTierVariant = (tier?: string) => {
+    switch (tier?.toUpperCase()) {
+      case 'PLATINUM': return 'pink';
+      case 'GOLD': return 'gold';
+      case 'SILVER': return 'default';
+      case 'BRONZE': return 'warning';
+      default: return 'default';
     }
   };
 
@@ -96,38 +105,53 @@ export default function AppointmentTable({ filters, onFilterChange }: Appointmen
                 <tr key={item.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gray-200 rounded-lg shrink-0 overflow-hidden">
-                        {item.thumbnailUrl && <img src={item.thumbnailUrl} alt="" className="w-full h-full object-cover" />}
+                      <div className="w-10 h-10 bg-gray-200 rounded-lg shrink-0 overflow-hidden border border-gray-100">
+                        {item.thumbnailUrl ? (
+                          <img src={item.thumbnailUrl} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-gray-100 text-xs font-bold text-gray-400">N/A</div>
+                        )}
                       </div>
                       <div>
-                        <p className="font-bold text-gray-900 text-xs line-clamp-1 max-w-[150px]">{item.propertyName}</p>
+                        <p className="font-bold text-gray-900 text-xs line-clamp-1 max-w-[150px]" title={item.propertyName}>{item.propertyName}</p>
                         <p className="text-[10px] text-red-600 font-bold mt-0.5">{formatCurrency(item.price)}</p>
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-gray-900 font-medium w-[180px]">{formatDate(item.requestedDate)}</td>
+                  <td className="px-6 py-4 text-gray-900 font-medium text-xs w-[160px]">
+                    {formatDate(item.requestedDate)}
+                  </td>
                   <td className="px-6 py-4">
                     <Badge variant={getStatusVariant(item.status) as any}>{item.status}</Badge>
                   </td>
-                  <td className="px-6 py-4 text-gray-900 font-medium">
+                  <td className="px-6 py-4 text-gray-900 font-medium text-xs max-w-[150px] truncate" title={[item.districtName, item.cityName].filter(Boolean).join(', ')}>
                     {[item.districtName, item.cityName].filter(Boolean).join(', ') || '---'}
                   </td>
                   <td className="px-6 py-4">
-                    <p className="font-bold text-gray-900 text-xs">{item.customerName || 'Unknown'}</p>
-                    <Badge variant="gold" className="mt-1">{item.customerTier || 'MEMBER'}</Badge>
+                    <div className="flex flex-col items-start gap-1">
+                      <p className="font-bold text-gray-900 text-xs">{item.customerName || 'Unknown'}</p>
+                      {/* Áp dụng getTierVariant cho Customer */}
+                      <Badge variant={getTierVariant(item.customerTier) as any} className="text-[9px] px-1.5 py-0">
+                        {item.customerTier || 'MEMBER'}
+                      </Badge>
+                    </div>
                   </td>
                   <td className="px-6 py-4">
                     {item.salesAgentName ? (
-                      <>
+                      <div className="flex flex-col items-start gap-1">
                         <p className="font-bold text-gray-900 text-xs">{item.salesAgentName}</p>
-                        <Badge variant="gold" className="mt-1">{item.salesAgentTier || 'AGENT'}</Badge>
-                      </>
-                    ) : <span className="text-gray-400">---</span>}
+                        {/* Áp dụng getTierVariant cho Sales Agent */}
+                        <Badge variant={getTierVariant(item.salesAgentTier) as any} className="text-[9px] px-1.5 py-0">
+                          {item.salesAgentTier || 'AGENT'}
+                        </Badge>
+                      </div>
+                    ) : <span className="text-gray-400 italic text-xs">Unassigned</span>}
                   </td>
                   <td className="px-6 py-4 text-right">
                     <Link
                       href={`/admin/appointments/${item.id}`}
-                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg inline-flex items-center justify-center transition-colors"
+                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg inline-flex items-center justify-center transition-colors"
+                      title="View Details"
                     >
                       <Eye className="w-5 h-5" />
                     </Link>
@@ -138,7 +162,6 @@ export default function AppointmentTable({ filters, onFilterChange }: Appointmen
           </tbody>
         </table>
       </div>
-      {/* Pagination */}
       <Pagination
         currentPage={filters.page || 1}
         totalItems={totalItems}
