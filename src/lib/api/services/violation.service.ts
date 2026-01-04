@@ -15,14 +15,14 @@ export interface ViolationCreateRequest {
     violationType: 'FRAUDULENT_LISTING' | 'MISREPRESENTATION_OF_PROPERTY' | 'SPAM_OR_DUPLICATE_LISTING' |
     'INAPPROPRIATE_CONTENT' | 'NON_COMPLIANCE_WITH_TERMS' | 'FAILURE_TO_DISCLOSE_INFORMATION' |
     'HARASSMENT' | 'SCAM_ATTEMPT';
-    description: string; // 10-1000 characters
+    description: string;
     violationReportedType: 'CUSTOMER' | 'PROPERTY' | 'SALES_AGENT' | 'PROPERTY_OWNER';
     reportedId: string;
 }
 
 export interface UpdateViolationRequest {
     status: 'PENDING' | 'REPORTED' | 'UNDER_REVIEW' | 'RESOLVED' | 'DISMISSED';
-    resolutionNotes?: string; // Max 2000 characters
+    resolutionNotes?: string;
     penaltyApplied?: 'WARNING' | 'REMOVED_POST' | 'SUSPENDED_ACCOUNT';
 }
 
@@ -113,8 +113,6 @@ export interface AdminViolationFilters {
     violationTypes?: string[];
     statuses?: string[];
     name?: string;
-    month?: number;
-    year?: number;
 }
 
 export interface MyViolationFilters {
@@ -136,11 +134,8 @@ export const violationService = {
         evidenceFiles?: File[]
     ): Promise<ViolationUserDetails> {
         const formData = new FormData();
-
-        // Add JSON payload
         formData.append('payload', JSON.stringify(data));
 
-        // Add evidence files if provided
         if (evidenceFiles && evidenceFiles.length > 0) {
             evidenceFiles.forEach(file => {
                 formData.append('evidenceFiles', file);
@@ -163,10 +158,50 @@ export const violationService = {
      * Get all violation reports with filters (Admin only)
      */
     async getAdminViolations(filters?: AdminViolationFilters): Promise<PaginatedResponse<ViolationAdminItem>> {
-        const response = await apiClient.get<PaginatedResponse<ViolationAdminItem>>(
-            VIOLATION_ENDPOINTS.ADMIN_VIOLATIONS,
-            { params: filters }
-        );
+        const params = new URLSearchParams();
+
+        if (!filters) {
+            params.append('page', '1');
+            params.append('limit', '10');
+            params.append('sortType', 'desc');
+            params.append('sortBy', 'createdAt');
+        } else {
+            const backendPage = (filters.page && filters.page > 0) ? filters.page  : 1;
+            params.append('page', backendPage.toString());
+
+            // Limit
+            if (filters.limit) params.append('limit', filters.limit.toString());
+            else params.append('limit', '10');
+
+            // Sorting
+            if (filters.sortType) params.append('sortType', filters.sortType);
+            if (filters.sortBy) params.append('sortBy', filters.sortBy);
+
+            if (filters.violationTypes && filters.violationTypes.length > 0) {
+                filters.violationTypes.forEach(type => {
+                    params.append('violationTypes', type);
+                });
+            }
+
+            if (filters.statuses && filters.statuses.length > 0) {
+                filters.statuses.forEach(status => {
+                    params.append('statuses', status);
+                });
+            }
+
+            if (filters.name) params.append('name', filters.name);
+        }
+
+        const url = `${VIOLATION_ENDPOINTS.ADMIN_VIOLATIONS}?${params.toString()}`;
+        console.log('🚀 Violation API Request:', url);
+
+        const response = await apiClient.get<PaginatedResponse<ViolationAdminItem>>(url);
+
+        console.log('✅ Violation API Response:', {
+            total: response.data.paging?.total || (response.data as any).meta?.total,
+            items: response.data.data?.length
+        });
+
         return response.data;
     },
 
@@ -198,10 +233,22 @@ export const violationService = {
      * Get my violation reports (Customer/Owner/Agent)
      */
     async getMyViolations(filters?: MyViolationFilters): Promise<PaginatedResponse<ViolationUserItem>> {
-        const response = await apiClient.get<PaginatedResponse<ViolationUserItem>>(
-            VIOLATION_ENDPOINTS.MY_VIOLATIONS,
-            { params: filters }
-        );
+        const params = new URLSearchParams();
+
+        if (!filters) {
+            params.append('page', '0');
+            params.append('limit', '10');
+        } else {
+            const backendPage = (filters.page && filters.page > 0) ? filters.page : 0;
+            params.append('page', backendPage.toString());
+
+            if (filters.limit) params.append('limit', filters.limit.toString());
+            if (filters.sortType) params.append('sortType', filters.sortType);
+            if (filters.sortBy) params.append('sortBy', filters.sortBy);
+        }
+
+        const url = `${VIOLATION_ENDPOINTS.MY_VIOLATIONS}?${params.toString()}`;
+        const response = await apiClient.get<PaginatedResponse<ViolationUserItem>>(url);
         return response.data;
     },
 

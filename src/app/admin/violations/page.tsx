@@ -12,12 +12,9 @@ import { AdminViolationFilters } from '@/lib/api/services/violation.service';
 export default function ViolationsPage() {
   const [isAdvSearchOpen, setIsAdvSearchOpen] = useState(false);
 
-  // State Filters
   const [filters, setFilters] = useState<AdminViolationFilters>({
     page: 1,
     limit: 10,
-    month: new Date().getMonth() + 1,
-    year: new Date().getFullYear()
   });
 
   const [stats, setStats] = useState<ViolationReportStats | null>(null);
@@ -40,7 +37,7 @@ export default function ViolationsPage() {
   const handleSearch = () => {
     setFilters(prev => ({
       ...prev,
-      name: keyword || undefined,  
+      name: keyword.trim() || undefined,  
       page: 1
     }));
   };
@@ -48,10 +45,8 @@ export default function ViolationsPage() {
   const handleAdvApply = (advFilters: AdminViolationFilters) => {
     setFilters({
       page: 1,
-      limit: 10,
-      month: new Date().getMonth() + 1,
-      year: new Date().getFullYear(),
-      ...advFilters  
+      limit: filters.limit || 10,
+      ...advFilters,
     });
     setIsAdvSearchOpen(false);
   };
@@ -61,8 +56,6 @@ export default function ViolationsPage() {
     setFilters({
       page: 1,
       limit: 10,
-      month: new Date().getMonth() + 1,
-      year: new Date().getFullYear()
     });
   };
 
@@ -78,6 +71,11 @@ export default function ViolationsPage() {
     { title: "Resolved", value: formatNum((stats?.totalViolationReports || 0) - (stats?.unsolved || 0)), trend: "", icon: CheckCircle },
   ];
 
+  const hasAdvancedFilters = !!(
+    filters.statuses?.length || 
+    filters.violationTypes?.length
+  );
+
   return (
     <div className="space-y-6">
       <div>
@@ -88,6 +86,7 @@ export default function ViolationsPage() {
       <StatsGrid stats={statsData} />
 
       <div className="space-y-4">
+        {/* Search Bar */}
         <div className="relative w-full">
           <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
           <input
@@ -106,18 +105,52 @@ export default function ViolationsPage() {
           </button>
         </div>
 
+        {/* Filter Controls */}
         <div className="flex items-center gap-3">
           <button
             onClick={() => setIsAdvSearchOpen(true)}
-            className="flex items-center gap-2 px-3 py-2 border border-gray-300 bg-white hover:bg-gray-50 font-medium rounded-lg text-sm text-gray-700"
+            className="flex items-center gap-2 px-3 py-2 border border-gray-300 bg-white hover:bg-gray-50 font-medium rounded-lg text-sm text-gray-700 transition-all"
           >
             <Filter className="w-4 h-4" /> Advanced Search
-            {(filters.statuses || filters.violationTypes) && (
+            {hasAdvancedFilters && (
               <span className="bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded ml-1">
                 {(filters.statuses?.length || 0) + (filters.violationTypes?.length || 0)}
               </span>
             )}
           </button>
+
+          {/* Show active filters */}
+          {hasAdvancedFilters && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded">
+                {[
+                  filters.statuses?.length && `${filters.statuses.length} status`,
+                  filters.violationTypes?.length && `${filters.violationTypes.length} type`
+                ].filter(Boolean).join(', ')}
+              </span>
+              <button 
+                onClick={handleReset} 
+                className="text-xs text-red-600 underline hover:text-red-700"
+              >
+                Clear all
+              </button>
+            </div>
+          )}
+
+          {/* Show search keyword if active */}
+          {filters.name && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-600 bg-blue-50 px-2 py-1 rounded">
+                Search: "{filters.name}"
+              </span>
+              <button 
+                onClick={handleReset} 
+                className="text-xs text-red-600 underline hover:text-red-700"
+              >
+                Clear
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

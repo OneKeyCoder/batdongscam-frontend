@@ -8,7 +8,7 @@ interface AgentsAdvancedSearchProps {
   onOpenLocationPicker: () => void;
   onApply: (filters: SaleAgentFilters) => void;
   onReset: () => void;
-  selectedLocations?: string[]; 
+  selectedLocations?: string[];
   onRemoveLocation: (locationName: string) => void;
 }
 
@@ -47,8 +47,8 @@ export default function AgentsAdvancedSearch({
   onRemoveLocation
 }: AgentsAdvancedSearchProps) {
 
-  // State for Filters
-  const [tier, setTier] = useState('');
+  // State
+  const [tier, setTier] = useState<string>('');
   const [minPoint, setMinPoint] = useState('');
   const [maxPoint, setMaxPoint] = useState('');
   const [minAssigns, setMinAssigns] = useState('');
@@ -60,7 +60,10 @@ export default function AgentsAdvancedSearch({
   const handleApply = () => {
     const filters: SaleAgentFilters = {};
 
-    if (tier) filters.agentTiers = [tier];
+    if (tier && tier !== '') {
+      filters.agentTiers = [tier];
+    }
+
     if (minPoint) filters.minPerformancePoint = Number(minPoint);
     if (maxPoint) filters.maxPerformancePoint = Number(maxPoint);
     if (minAssigns) filters.minAssignments = Number(minAssigns);
@@ -87,12 +90,13 @@ export default function AgentsAdvancedSearch({
         <p className="text-sm text-gray-500">Filter agents by multiple criteria</p>
 
         <div className="grid grid-cols-2 gap-4">
-          {/* Tier */}
+
+          {/* TIER FILTER */}
           <div className="col-span-2">
             <label className="block text-sm font-bold text-gray-900 mb-1.5">Tier</label>
             <div className="relative">
               <select
-                className="w-full appearance-none border border-gray-300 rounded-lg px-3 py-2.5 bg-gray-50 text-sm font-medium focus:outline-none focus:border-red-500 cursor-pointer"
+                className="w-full appearance-none border border-gray-300 rounded-lg px-3 py-2.5 bg-gray-50 text-sm font-medium focus:outline-none focus:border-red-500 cursor-pointer text-gray-700"
                 value={tier}
                 onChange={(e) => setTier(e.target.value)}
               >
@@ -129,14 +133,14 @@ export default function AgentsAdvancedSearch({
             <input
               type="number"
               min="0" max="5" step="0.1"
-              placeholder="e.g. 4.0"
+              placeholder="e.g. 4.5"
               className="w-full border border-gray-300 rounded-lg px-3 py-2.5 bg-gray-50 text-sm focus:outline-none focus:border-red-500"
               value={minRating}
               onChange={(e) => setMinRating(e.target.value)}
             />
           </div>
 
-          {/* Location Picker Trigger */}
+          {/* LOCATION FILTER */}
           <div className="col-span-2">
             <label className="block text-sm font-bold text-gray-900 mb-1.5">Location</label>
             <div
@@ -165,7 +169,6 @@ export default function AgentsAdvancedSearch({
         </div>
       </div>
 
-      {/* Footer */}
       <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
         <button onClick={handleReset} className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-50 flex items-center gap-2 transition-colors">
           <RotateCcw className="w-3 h-3" /> Reset All

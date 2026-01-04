@@ -5,6 +5,7 @@ import { Loader2 } from 'lucide-react';
 import Badge from '@/app/components/ui/Badge';
 import Pagination from '@/app/components/Pagination';
 import { assignmentService, FreeAgentListItem, FreeAgentFilters } from '@/lib/api/services/assignment.service';
+import { getFullUrl } from '@/lib/utils/urlUtils';
 
 interface SelectAgentTableProps {
   onSelect: (agentId: string) => void;
@@ -42,6 +43,16 @@ export default function SelectAgentTable({ onSelect, filters, onPageChange }: Se
     setSelectingId(null);
   };
 
+  const getTierVariant = (tier?: string) => {
+    switch (tier?.toUpperCase()) {
+      case 'PLATINUM': return 'pink';
+      case 'GOLD': return 'gold';
+      case 'SILVER': return 'default';
+      case 'BRONZE': return 'warning';
+      default: return 'default';
+    }
+  };
+
   if (loading) {
     return <div className="bg-white border border-gray-200 rounded-xl p-12 flex justify-center"><Loader2 className="w-8 h-8 text-red-600 animate-spin" /></div>;
   }
@@ -70,13 +81,12 @@ export default function SelectAgentTable({ onSelect, filters, onPageChange }: Se
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-gray-200 rounded-lg shrink-0 overflow-hidden">
-                        {item.avatarUrl ? (
-                          <img src={item.avatarUrl} className="w-full h-full object-cover" alt="avatar" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-gray-300 text-gray-500 text-xs font-bold">
-                            {item.fullName?.charAt(0)}
-                          </div>
-                        )}
+                        <img
+                          src={getFullUrl(item.avatarUrl)}
+                          className="w-full h-full object-cover"
+                          alt={item.fullName}
+                          onError={(e) => { e.currentTarget.src = `https://ui-avatars.com/api/?name=${item.fullName}` }}
+                        />
                       </div>
                       <div>
                         <p className="font-bold text-gray-900 text-xs">{item.fullName}</p>
@@ -85,7 +95,9 @@ export default function SelectAgentTable({ onSelect, filters, onPageChange }: Se
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4"><Badge variant="pink">{item.tier || 'MEMBER'}</Badge></td>
+                  <td className="px-6 py-4">
+                    <Badge variant={getTierVariant(item.tier) as any}>{item.tier || 'MEMBER'}</Badge>
+                  </td>
                   <td className="px-6 py-4 font-medium text-gray-900">{item.assignedAppointments || 0}</td>
                   <td className="px-6 py-4 font-medium text-gray-900">{item.assignedProperties || 0}</td>
                   <td className="px-6 py-4 font-medium text-gray-900">{item.maxProperties || '---'}</td>

@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Home, Layout, Building2, MapPin, X } from 'lucide-react';
+import { Search, Filter, Home, Layout, Building2, MapPin, X, Plus } from 'lucide-react';
 import StatsGrid from '@/app/components/StatsGrid';
 import Modal from '@/app/components/ui/Modal';
 import LocationPicker, { LocationSelection } from '@/app/components/LocationPicker';
 import PropertiesTable from '@/app/components/features/admin/properties/PropertiesTable';
 import AdvancedSearchForm from '@/app/components/features/admin/properties/AdvancedSearchForm';
+import AddPropertyForm from '@/app/components/features/admin/properties/AddPropertyForm';
 import { propertyService } from '@/lib/api/services/property.service';
 import { reportService, DashboardTopStats } from '@/lib/api/services/statistic-report.service';
 import { PropertyCard, PropertyFilters } from '@/lib/api/types';
@@ -19,22 +20,19 @@ let cacheLoaded = false;
 export default function PropertiesPage() {
   const [isAdvSearchOpen, setIsAdvSearchOpen] = useState(false);
   const [isLocPickerOpen, setIsLocPickerOpen] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
-  // State for Advanced Search Modal
   const [selectedLocations, setSelectedLocations] = useState<LocationSelection[]>([]);
-
-  // State for Main Page Search
   const [locationSearchResults, setLocationSearchResults] = useState<any[]>([]);
   const [data, setData] = useState<PropertyCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalItems, setTotalItems] = useState(0);
 
-  // Helper to store names of selected IDs (fixes UUID display issue)
   const [activeLocationNames, setActiveLocationNames] = useState<Record<string, string>>({});
 
   const [filters, setFilters] = useState<PropertyFilters>({
     page: 1,
-    limit: 10,
+    limit: 15,
     sortBy: 'createdAt',
     sortType: 'desc'
   });
@@ -43,12 +41,10 @@ export default function PropertiesPage() {
   const [showDropdown, setShowDropdown] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
 
-  // Stats
   const [dashboardStats, setDashboardStats] = useState<DashboardTopStats | null>(null);
   const [forSaleCount, setForSaleCount] = useState<number>(0);
   const [forRentCount, setForRentCount] = useState<number>(0);
 
-  // Load Cache
   useEffect(() => {
     const loadAllLocations = async () => {
       if (cacheLoaded) return;
@@ -72,13 +68,14 @@ export default function PropertiesPage() {
     loadAllLocations();
   }, []);
 
-  // Fetch Stats & Properties (Keep your existing useEffects here)
   useEffect(() => {
     const fetchStats = async () => {
       try {
         const stats = await reportService.getDashboardTopStats();
         setDashboardStats(stats);
-      } catch (error) { }
+      } catch (error) {
+        console.error('Failed to fetch stats:', error);
+      }
     };
     fetchStats();
   }, []);
@@ -86,33 +83,46 @@ export default function PropertiesPage() {
   useEffect(() => {
     const fetchPropertyCounts = async () => {
       try {
-        const saleRes = await propertyService.getPropertyCards({ page: 1, limit: 1, transactionType: ['SALE'] });
+        const saleRes = await propertyService.getPropertyCards({
+          page: 1,
+          limit: 1,
+          transactionType: ['SALE']
+        });
         setForSaleCount(saleRes.paging?.total || 0);
-        const rentRes = await propertyService.getPropertyCards({ page: 1, limit: 1, transactionType: ['RENT'] });
+
+        const rentRes = await propertyService.getPropertyCards({
+          page: 1,
+          limit: 1,
+          transactionType: ['RENTAL']
+        });
         setForRentCount(rentRes.paging?.total || 0);
-      } catch (error) { }
+      } catch (error) {
+        console.error('Failed to fetch property counts:', error);
+      }
     };
     fetchPropertyCounts();
   }, []);
 
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const res = await propertyService.getPropertyCards(filters);
+      setData(res.data);
+      if (res.paging) setTotalItems(res.paging.total);
+    } catch (error) {
+      console.error("❌ Failed to fetch properties", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const timer = setTimeout(async () => {
-      setLoading(true);
-      try {
-        const res = await propertyService.getPropertyCards(filters);
-        setData(res.data);
-        if (res.paging) setTotalItems(res.paging.total);
-        else if ((res as any).meta) setTotalItems((res as any).meta.total);
-      } catch (error) {
-        console.error("Failed to fetch properties", error);
-      } finally {
-        setLoading(false);
-      }
+    const timer = setTimeout(() => {
+      fetchData();
     }, 500);
     return () => clearTimeout(timer);
   }, [filters]);
 
-  // Search Logic
   useEffect(() => {
     if (!searchKeyword || searchKeyword.trim().length < 2) {
       setLocationSearchResults([]);
@@ -135,6 +145,7 @@ export default function PropertiesPage() {
           .filter(([id, name]) => normalizeVietnamese(name).includes(normalizedKeyword))
           .map(([id, name]) => ({ id, name, type: 'CITY', fullPath: name }));
         results = [...cityMatches];
+
         const allDistricts = await locationService.getChildLocations('DISTRICT');
         const districtMatches = Array.from(allDistricts.entries())
           .filter(([id, name]) => normalizeVietnamese(name).includes(normalizedKeyword))
@@ -147,7 +158,7 @@ export default function PropertiesPage() {
           .map(([id, name]) => ({ id, name, type: 'WARD', fullPath: name }));
         results = [...results, ...wardMatches];
 
-        setLocationSearchResults(results.slice(0, 15)); // Limit to 15
+        setLocationSearchResults(results.slice(0, 15));
         setShowDropdown(results.length > 0);
       } catch (error) {
         console.error('Failed to search locations:', error);
@@ -160,13 +171,9 @@ export default function PropertiesPage() {
     return () => clearTimeout(debounce);
   }, [searchKeyword]);
 
-  // --- Handlers ---
-
   const handleSelectLocation = (loc: any) => {
-    // 1. Save name to state to fix UI issue
     setActiveLocationNames(prev => ({ ...prev, [loc.id]: loc.name }));
 
-    // 2. Update Filter
     if (loc.type === 'CITY') {
       const existing = filters.cityIds || [];
       if (!existing.includes(loc.id)) setFilters(prev => ({ ...prev, cityIds: [...existing, loc.id], page: 1 }));
@@ -191,11 +198,9 @@ export default function PropertiesPage() {
 
   const handlePageChange = (newPage: number) => setFilters(prev => ({ ...prev, page: newPage }));
 
-  // Advanced Search Handler
   const handleAdvancedSearchApply = (newFilters: PropertyFilters) => {
     setFilters(prev => ({ ...prev, ...newFilters, page: 1 }));
 
-    // Sync names from Advanced Search to local state so tags appear correctly
     if (selectedLocations.length > 0) {
       const newNames: Record<string, string> = {};
       selectedLocations.forEach(loc => { newNames[loc.id] = loc.name; });
@@ -209,18 +214,57 @@ export default function PropertiesPage() {
     setSelectedLocations(prev => prev.filter(l => l.id !== id));
   };
 
-  // Helper: Get Name safely
-  const getLocationName = (id: string, type: string) => {
-    // Priority 1: Local state (Active selections)
-    if (activeLocationNames[id]) return activeLocationNames[id];
+  const handleCreateSuccess = () => {
+    setIsAddModalOpen(false);
+    window.location.reload();
+  };
 
-    // Priority 2: Global Cache
+  const getLocationName = (id: string, type: string) => {
+    if (activeLocationNames[id]) return activeLocationNames[id];
     const loc = allLocationsCache.find(l => l.id === id && l.type === type);
     if (loc) return loc.name;
-
-    // Priority 3: Fallback
     return id.substring(0, 8) + '...';
   };
+
+  // --- Handle Reset & Check Filters ---
+  const handleResetFilters = () => {
+    setFilters({
+      page: 1,
+      limit: 15,
+      sortBy: 'createdAt',
+      sortType: 'desc',
+      search: ''
+    });
+    setSelectedLocations([]);
+    setActiveLocationNames({});
+    setSearchKeyword('');
+  };
+
+  const hasAdvancedFilters = !!(
+    // Array checks
+    filters.cityIds?.length ||
+    filters.districtIds?.length ||
+    filters.wardIds?.length ||
+    filters.propertyTypeIds?.length ||
+    filters.transactionType?.length ||
+    filters.statuses?.length ||
+    // Numeric/Range checks
+    filters.minPrice !== undefined ||
+    filters.maxPrice !== undefined ||
+    filters.minArea !== undefined ||
+    filters.maxArea !== undefined ||
+    filters.rooms !== undefined ||
+    filters.bathrooms !== undefined ||
+    filters.bedrooms !== undefined ||
+    filters.floors !== undefined ||
+    // String/Boolean checks
+    filters.houseOrientation ||
+    filters.balconyOrientation ||
+    filters.ownerId ||
+    filters.agentId ||
+    filters.topK !== undefined
+  );
+  // ------------------------------------------
 
   const stats = [
     { title: "Total properties", value: dashboardStats?.totalProperties.toLocaleString() || totalItems.toLocaleString(), trend: "", icon: Home },
@@ -231,7 +275,10 @@ export default function PropertiesPage() {
 
   return (
     <div className="space-y-6">
-      <div><h2 className="text-2xl font-bold text-gray-900 mb-1">Properties Management</h2></div>
+      <div className="flex justify-between items-center mb-1">
+        <h2 className="text-2xl font-bold text-gray-900">Properties Management</h2>
+      </div>
+
       <StatsGrid stats={stats} />
 
       <div className="space-y-4">
@@ -247,12 +294,8 @@ export default function PropertiesPage() {
             onFocus={() => { if (locationSearchResults.length > 0) setShowDropdown(true); }}
           />
 
-          {/* Dropdown */}
           {showDropdown && locationSearchResults.length > 0 && (
             <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-xl z-50 max-h-80 overflow-y-auto">
-              <div className="px-4 py-2 bg-gray-50 border-b text-xs text-gray-500 font-medium">
-                Found {locationSearchResults.length} location{locationSearchResults.length > 1 ? 's' : ''}
-              </div>
               {locationSearchResults.map((loc) => (
                 <button
                   key={`${loc.type}-${loc.id}`}
@@ -274,7 +317,7 @@ export default function PropertiesPage() {
           )}
         </div>
 
-        {/* Selected Filters Tags */}
+        {/* Existing Location Chips */}
         {(filters.cityIds?.length || filters.districtIds?.length || filters.wardIds?.length) ? (
           <div className="flex flex-wrap gap-2">
             {filters.cityIds?.map(id => (
@@ -301,13 +344,42 @@ export default function PropertiesPage() {
           </div>
         ) : null}
 
-        {/* Controls */}
-        <div className="flex items-center gap-3">
-          <button onClick={() => setIsAdvSearchOpen(true)} className="flex items-center gap-2 px-3 py-2 border border-gray-300 bg-white hover:bg-gray-50 rounded-lg text-sm font-medium">
-            <Filter className="w-4 h-4" /> Advanced Search
-            <span className="bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded ml-1">
-              {Object.keys(filters).length - 4 > 0 ? Object.keys(filters).length - 4 : 0}
-            </span>
+        {/* CONTROLS ROW */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setIsAdvSearchOpen(true)} className="flex items-center gap-2 px-3 py-2 border border-gray-300 bg-white hover:bg-gray-50 rounded-lg text-sm font-medium transition-colors">
+              <Filter className="w-4 h-4" /> Advanced Search
+            </button>
+
+            {/* Filter Summary & Clear */}
+            {hasAdvancedFilters && (
+              <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2 duration-300">
+                <span className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded hidden sm:inline-block">
+                  {[
+                    (filters.minPrice !== undefined || filters.maxPrice !== undefined) && 'Price',
+                    (filters.minArea !== undefined || filters.maxArea !== undefined) && 'Area',
+                    filters.transactionType?.length && 'Trans. Type',
+                    filters.propertyTypeIds?.length && 'Prop. Type',
+                    filters.statuses?.length && 'Status',
+                    (filters.cityIds?.length || filters.districtIds?.length || filters.wardIds?.length) && 'Location'
+                  ].filter(Boolean).join(', ')}
+                </span>
+                <button
+                  onClick={handleResetFilters}
+                  className="text-xs text-red-600 underline hover:text-red-700 whitespace-nowrap"
+                >
+                  Clear all
+                </button>
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="flex items-center gap-2 px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-sm transition-colors text-sm"
+          >
+            <Plus className="w-4 h-4" />
+            Add Property
           </button>
         </div>
       </div>
@@ -317,9 +389,9 @@ export default function PropertiesPage() {
         isLoading={loading}
         totalItems={totalItems}
         currentPage={filters.page || 1}
-        itemsPerPage={filters.limit || 10}
+        itemsPerPage={filters.limit || 15}
         onPageChange={handlePageChange}
-        onRefresh={() => setFilters({ ...filters })}
+        onRefresh={fetchData}
       />
 
       <Modal isOpen={isAdvSearchOpen} onClose={() => { if (!isLocPickerOpen) setIsAdvSearchOpen(false); }} title="Advanced Search">
@@ -327,13 +399,13 @@ export default function PropertiesPage() {
           selectedLocations={selectedLocations}
           onOpenLocationPicker={() => setIsLocPickerOpen(true)}
           onApply={handleAdvancedSearchApply}
-          onReset={() => {
-            setFilters({ page: 1, limit: 10, sortBy: 'createdAt', sortType: 'desc' });
-            setSelectedLocations([]);
-            setActiveLocationNames({}); // Reset names map
-          }}
+          onReset={handleResetFilters}
           onRemoveLocation={handleRemoveLocation}
         />
+      </Modal>
+
+      <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title="Add New Property">
+        {isAddModalOpen && <AddPropertyForm onSuccess={handleCreateSuccess} onCancel={() => setIsAddModalOpen(false)} />}
       </Modal>
 
       <LocationPicker
@@ -342,11 +414,9 @@ export default function PropertiesPage() {
         initialSelected={selectedLocations}
         onConfirm={(newLocs) => {
           setSelectedLocations(newLocs);
-          // Sync names immediately
           const newNames: Record<string, string> = {};
           newLocs.forEach(loc => { newNames[loc.id] = loc.name; });
           setActiveLocationNames(prev => ({ ...prev, ...newNames }));
-
           setIsLocPickerOpen(false);
         }}
       />

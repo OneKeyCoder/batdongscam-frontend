@@ -231,7 +231,8 @@ export interface PropertyFilters {
   floors?: number;
   houseOrientation?: string;
   balconyOrientation?: string;
-  transactionType?: ('SALE' | 'RENT')[];
+  transactionType?: ('SALE' | 'RENTAL')[];
+  search?: string;
   statuses?: string[];
   topK?: boolean;
   ownerId?: string;

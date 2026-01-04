@@ -3,7 +3,7 @@
 import React, { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, Loader2, Edit, XCircle, Save, X } from 'lucide-react';
+import { ChevronLeft, Loader2, Edit, XCircle, Save, X, AlertTriangle, Info } from 'lucide-react'; // Import thêm icon
 import OverviewTab from '@/app/components/features/admin/contracts/detail/OverviewTab';
 import PaymentDetailsTab from '@/app/components/features/admin/contracts/detail/PaymentDetailsTab';
 import PartiesTab from '@/app/components/features/admin/contracts/detail/PartiesTab';
@@ -19,7 +19,7 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
   const [data, setData] = useState<ContractDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Edit State - Only editable fields from UpdateContractRequest 
+  // Edit State
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<UpdateContractRequest>({});
   const [saving, setSaving] = useState(false);
@@ -38,7 +38,7 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
         endDate: res.endDate ? res.endDate.split('T')[0] : undefined,
         specialTerms: res.specialTerms,
         status: res.status as any,
-        latePaymentPenaltyRate: res.latePaymentPenaltyRate ? res.latePaymentPenaltyRate * 100 : 0, 
+        latePaymentPenaltyRate: res.latePaymentPenaltyRate ? res.latePaymentPenaltyRate * 100 : 0,
         specialConditions: res.specialConditions
       });
     } catch (error) {
@@ -55,17 +55,39 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
     try {
       const payload: UpdateContractRequest = {
         ...editData,
-        endDate: editData.endDate ? new Date(editData.endDate).toISOString() : undefined,
-        latePaymentPenaltyRate: editData.latePaymentPenaltyRate ? Number(editData.latePaymentPenaltyRate) / 100 : 0,
+        endDate: editData.endDate
+          ? new Date(editData.endDate).toISOString().split('T')[0]
+          : undefined,
+        latePaymentPenaltyRate: editData.latePaymentPenaltyRate
+          ? Number(editData.latePaymentPenaltyRate) / 100
+          : 0,
       };
 
+      Object.keys(payload).forEach(key => {
+        const k = key as keyof UpdateContractRequest;
+        if (payload[k] === "" || payload[k] === null || payload[k] === undefined) {
+          delete payload[k];
+        }
+      });
+
       await contractService.updateContract(id, payload);
-      alert("Contract updated successfully!");
+      alert("✅ Contract updated successfully!");
       setIsEditing(false);
-      fetchData(); 
-    } catch (error) {
-      console.error(error);
-      alert("Failed to update contract.");
+      fetchData();
+    } catch (error: any) {
+      console.error("Update failed:", error);
+      let errorMessage = "Failed to update contract.";
+
+      if (error?.response?.data) {
+        if (error.response.data.message) {
+          errorMessage = error.response.data.message;
+        }
+        if (error.response.data.errors && Array.isArray(error.response.data.errors)) {
+          errorMessage += `\nDetails: ${error.response.data.errors.join(', ')}`;
+        }
+      }
+
+      alert(`❌ Update Failed:\n${errorMessage}`);
     } finally {
       setSaving(false);
     }
@@ -76,12 +98,13 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
     setCanceling(true);
     try {
       await contractService.cancelContract(id, { reason: cancelReason });
-      alert("Contract cancelled.");
+      alert("✅ Contract cancelled.");
       setIsCancelModalOpen(false);
       fetchData();
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert("Failed to cancel contract.");
+      const msg = error?.response?.data?.message || "Failed to cancel contract.";
+      alert(`❌ Cancel Failed: ${msg}`);
     } finally {
       setCanceling(false);
     }
@@ -133,13 +156,30 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
                     <XCircle className="w-4 h-4" /> Cancel Contract
                   </button>
                 )}
-                <button onClick={() => setIsEditing(true)} className="px-6 py-2 bg-red-600 text-white font-bold rounded-lg text-sm hover:bg-red-700 transition-colors flex items-center gap-2">
+                <button
+                  onClick={() => setIsEditing(true)}
+                  className="px-6 py-2 bg-red-600 text-white font-bold rounded-lg text-sm hover:bg-red-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                   <Edit className="w-4 h-4" /> Edit
                 </button>
               </>
             )}
           </div>
         </div>
+
+        {isEditing && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+            <Info className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+            <div className="text-sm text-blue-800">
+              <p className="font-bold mb-1">Editing Mode Active</p>
+              <ul className="list-disc ml-4 space-y-0.5">
+                <li>You can only update details when contract is in <strong>DRAFT</strong> or <strong>PENDING_SIGNING</strong> status.</li>
+                <li>Only <strong>End Date</strong>, <strong>Special Terms</strong>, <strong>Penalty Rate</strong>, and <strong>Special Conditions</strong> are editable.</li>
+                <li>Changes to financial amounts are restricted to prevent calculation errors.</li>
+              </ul>
+            </div>
+          </div>
+        )}
 
         <div className="flex gap-8 border-b border-gray-200">
           {[{ id: 'overview', label: 'Overview' }, { id: 'payment', label: 'Payment details' }, { id: 'parties', label: 'Parties' }, { id: 'timeline', label: 'Timeline' }].map((tab) => (
@@ -157,10 +197,10 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
 
       <Modal isOpen={isCancelModalOpen} onClose={() => setIsCancelModalOpen(false)} title="Cancel Contract">
         <div className="space-y-4">
-          <p className="text-sm text-gray-600">Are you sure you want to cancel this contract?</p>
+          <p className="text-sm text-gray-600">Are you sure you want to cancel this contract? This action cannot be undone.</p>
           <div>
             <label className="block text-sm font-bold text-gray-900 mb-1.5">Reason <span className="text-red-500">*</span></label>
-            <textarea className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:border-red-500 outline-none" rows={3} value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="Enter reason..." />
+            <textarea className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:border-red-500 outline-none" rows={3} value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="Enter cancellation reason..." />
           </div>
           <div className="flex justify-end gap-3 pt-2">
             <button onClick={() => setIsCancelModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-bold">Close</button>

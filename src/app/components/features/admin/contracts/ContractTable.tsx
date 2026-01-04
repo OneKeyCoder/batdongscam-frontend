@@ -21,19 +21,8 @@ export default function ContractTable({ filters, onFilterChange }: Props) {
     const fetchData = async () => {
       setLoading(true);
       try {
-        console.log('🔍 ContractTable - Fetching with filters:', JSON.stringify(filters, null, 2));
-        
         const res = await contractService.getContracts(filters);
-        
-        console.log('✅ ContractTable - Response:', {
-          dataLength: res.data.length,
-          pagination: res.paging,
-          firstItem: res.data[0]
-        });
-        
         setData(res.data);
-        
-        // Fix: Dùng đúng cấu trúc response
         if (res.paging) {
           setTotalItems(res.paging.total);
         }
@@ -60,17 +49,22 @@ export default function ContractTable({ filters, onFilterChange }: Props) {
 
   const getStatusVariant = (status: string) => {
     switch (status) {
-      case 'ACTIVE': return 'success';        
-      case 'COMPLETED': return 'blue';       
-      case 'CANCELLED': return 'failed';      
-      case 'PENDING_SIGNING': return 'pending'; 
-      case 'DRAFT': return 'gray';            
+      case 'ACTIVE': return 'success';
+      case 'COMPLETED': return 'blue';
+      case 'CANCELLED': return 'failed';
+      case 'PENDING_SIGNING': return 'pending';
+      case 'DRAFT': return 'gray';
       default: return 'default';
     }
   };
 
   const getTypeVariant = (type: string) => {
-    return type === 'PURCHASE' ? 'sale' : 'rental'; 
+    return type === 'PURCHASE' ? 'sale' : 'rental';
+  };
+
+  const formatStatusLabel = (status: string) => {
+    if (status === 'PENDING_SIGNING') return 'PENDING SIGN';
+    return status.replace(/_/g, ' ');
   };
 
   if (loading) return <div className="flex justify-center p-12 bg-white border rounded-xl"><Loader2 className="w-8 h-8 text-red-600 animate-spin" /></div>;
@@ -83,8 +77,9 @@ export default function ContractTable({ filters, onFilterChange }: Props) {
             <tr>
               <th className="px-6 py-4 font-bold text-gray-900 w-[15%]">Contract No.</th>
               <th className="px-6 py-4 font-bold text-gray-900 w-[25%]">Property</th>
-              <th className="px-6 py-4 font-bold text-gray-900 w-[10%]">Status</th>
-              <th className="px-6 py-4 font-bold text-gray-900 w-[20%]">Duration</th>
+              {/* [FIX] Căn giữa header Status */}
+              <th className="px-6 py-4 font-bold text-gray-900 w-[12%] text-center">Status</th>
+              <th className="px-6 py-4 font-bold text-gray-900 w-[18%]">Duration</th>
               <th className="px-6 py-4 font-bold text-gray-900 w-[15%]">Total Amount</th>
               <th className="px-6 py-4 font-bold text-gray-900 w-[10%]">Parties</th>
               <th className="px-6 py-4 font-bold text-gray-900 w-[5%] text-right"></th>
@@ -116,10 +111,15 @@ export default function ContractTable({ filters, onFilterChange }: Props) {
                     </p>
                   </td>
 
-                  {/* Status Badge */}
-                  <td className="px-6 py-4 align-top">
-                    <Badge variant={getStatusVariant(item.status) as any}>
-                      {item.status.replace(/_/g, ' ')}
+                  {/* Status Badge [FIXED] */}
+                  {/* Căn giữa ô chứa + Đặt min-width cho Badge để thẳng hàng tăm tắp */}
+                  <td className="px-6 py-4 align-top text-center">
+                    <Badge
+                      variant={getStatusVariant(item.status) as any}
+                      // w-[110px]: Chiều rộng cố định | justify-center: Căn giữa chữ trong badge
+                      className="whitespace-nowrap text-[10px] w-[110px] justify-center py-1"
+                    >
+                      {formatStatusLabel(item.status)}
                     </Badge>
                   </td>
 
@@ -147,7 +147,6 @@ export default function ContractTable({ filters, onFilterChange }: Props) {
                   {/* Customer & Agent Info */}
                   <td className="px-6 py-4 align-top">
                     <div className="flex flex-col gap-3 text-xs">
-                      {/* Customer */}
                       <div className="flex items-center gap-2" title="Customer">
                         <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold shrink-0">
                           {item.customerFirstName?.charAt(0)}
@@ -157,7 +156,6 @@ export default function ContractTable({ filters, onFilterChange }: Props) {
                           <p className="text-[10px] text-gray-400">Customer</p>
                         </div>
                       </div>
-                      {/* Agent */}
                       <div className="flex items-center gap-2" title="Agent">
                         <div className="w-6 h-6 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center font-bold shrink-0">
                           {item.agentFirstName?.charAt(0)}

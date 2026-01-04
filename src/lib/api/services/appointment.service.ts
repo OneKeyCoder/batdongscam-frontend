@@ -17,7 +17,7 @@ export interface CreateAppointmentRequest {
   preferredDate: string;
   preferredTime: string;
   message?: string;
-  customerId?: string; 
+  customerId?: string;
   agentId?: string;
 }
 
@@ -186,7 +186,7 @@ export interface ViewingListFilters {
   sortBy?: string;
   propertyName?: string;
   propertyTypeIds?: string[];
-  transactionTypeEnums?: ('SALE' | 'RENT')[];
+  transactionTypeEnums?: ('SALE' | 'RENTAL')[];
   agentName?: string;
   agentTiers?: string[];
   customerName?: string;
@@ -272,7 +272,9 @@ export const appointmentService = {
   async getViewingList(filters?: ViewingListFilters): Promise<PaginatedResponse<ViewingListItem>> {
     const response = await apiClient.get<PaginatedResponse<ViewingListItem>>(
       APPOINTMENT_ENDPOINTS.ADMIN_VIEWING_LIST,
-      { params: filters }
+      {
+        params: filters,
+      }
     );
     return response.data;
   },

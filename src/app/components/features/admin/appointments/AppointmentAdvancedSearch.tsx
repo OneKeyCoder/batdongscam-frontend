@@ -7,11 +7,11 @@ import { LocationSelection } from '@/app/components/LocationPicker';
 
 // --- STYLES ---
 const scrollbarStyle = `
-  .hide-scrollbar::-webkit-scrollbar { width: 4px; }
-  .hide-scrollbar::-webkit-scrollbar-track { background: transparent; }
-  .hide-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 4px; }
-  .hide-scrollbar::-webkit-scrollbar-thumb:hover { background-color: #94a3b8; }
-`;
+    .hide-scrollbar::-webkit-scrollbar { width: 4px; }
+    .hide-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .hide-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 4px; }
+    .hide-scrollbar::-webkit-scrollbar-thumb:hover { background-color: #94a3b8; }
+  `;
 
 // --- CONSTANTS ---
 const APPOINTMENT_STATUSES = [
@@ -22,7 +22,7 @@ const APPOINTMENT_STATUSES = [
 ];
 
 const TIERS = [
-  { label: 'BRONZE', value: 'BRONZE' },
+  { label: 'Bronze', value: 'BRONZE' },
   { label: 'Silver', value: 'SILVER' },
   { label: 'Gold', value: 'GOLD' },
   { label: 'Platinum', value: 'PLATINUM' }
@@ -38,7 +38,7 @@ interface SearchProps {
 }
 
 interface LocalState {
-  status: string; 
+  status: string;
   transactionType: string;
   agentName: string;
   agentTier: string;
@@ -56,7 +56,7 @@ export default function AppointmentAdvancedSearch({
 
   // State form local
   const [filters, setFilters] = useState<LocalState>({
-    status: 'All', 
+    status: 'All',
     transactionType: 'All',
     agentName: '',
     agentTier: 'All',
@@ -180,7 +180,7 @@ export default function AppointmentAdvancedSearch({
                 options={[
                   { label: 'All', value: 'All' },
                   { label: 'Sale', value: 'SALE' },
-                  { label: 'Rent', value: 'RENT' }
+                  { label: 'Rent', value: 'RENTAL' }
                 ]}
               />
             </FormGroup>
@@ -367,7 +367,7 @@ const NumberInput = ({ value, onChange, placeholder, error }: { value: string, o
 
   return (
     <input
-      type="text" 
+      type="text"
       value={value}
       onChange={handleChange}
       placeholder={placeholder}

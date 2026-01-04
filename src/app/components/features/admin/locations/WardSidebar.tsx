@@ -1,81 +1,80 @@
+// path: app/components/features/admin/locations/WardSidebar.tsx
 'use client';
 
 import React, { useEffect, useState } from 'react';
 import { User, Heart, Loader2, AlertCircle, MapPin } from 'lucide-react';
 import { locationService, LocationCardResponse } from '@/lib/api/services/location.service';
-import { favoriteService, LikeType } from '@/lib/api/services/favorite.service';
-import Link from 'next/link';
+import { favoriteService, LikeType } from '@/lib/api/services/favorite.service'; 
 
-const DEFAULT_IMAGE = "https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?q=80&w=2670&auto=format&fit=crop";
+const DEFAULT_IMAGE = "https://images.unsplash.com/photo-1596422846543-75c6fc197f07?q=80&w=2670&auto=format&fit=crop";
 
-interface DistrictSidebarProps {
-  parentId?: string;
+interface WardSidebarProps {
+  parentId?: string; // Đây là districtId
 }
 
-export default function DistrictSidebar({ parentId }: DistrictSidebarProps) {
-  const [districts, setDistricts] = useState<LocationCardResponse[]>([]);
+export default function WardSidebar({ parentId }: WardSidebarProps) {
+  const [wards, setWards] = useState<LocationCardResponse[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // 1. Fetch Data
+  // 1. Fetch Wards
   useEffect(() => {
-    const fetchDistricts = async () => {
+    const fetchWards = async () => {
       if (!parentId) return;
       setLoading(true);
       try {
         const res = await locationService.getLocationCards({
           page: 1,
-          limit: 20,
-          locationTypeEnum: 'DISTRICT',
-          cityIds: [parentId],
+          limit: 20, 
+          locationTypeEnum: 'WARD', 
+          districtIds: [parentId],  
           sortBy: 'avgLandPrice',
           sortType: 'desc'
         });
-        setDistricts(res.data);
+        setWards(res.data);
       } catch (error) {
-        console.error("Failed to fetch district cards", error);
+        console.error("Failed to fetch ward cards", error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchDistricts();
+    fetchWards();
   }, [parentId]);
 
-  // 2. Xử lý Favorite (Tim)
   const handleToggleFavorite = async (e: React.MouseEvent, item: LocationCardResponse) => {
-    e.preventDefault();
+    e.preventDefault(); 
     e.stopPropagation();
 
-    const updatedList = districts.map(d =>
+    const updatedList = wards.map(d =>
       d.id === item.id ? { ...d, isFavorite: !d.isFavorite } : d
     );
-    setDistricts(updatedList);
+    setWards(updatedList);
 
     try {
-      await favoriteService.toggleLike(item.id, LikeType.DISTRICT);
+      await favoriteService.toggleLike(item.id, LikeType.WARD);
     } catch (error) {
       console.error("Failed to toggle like", error);
-      setDistricts(districts);
+      setWards(wards); 
     }
   };
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="font-bold text-gray-900 text-lg">Districts</h3>
-        <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-full">{districts.length} found</span>
+        <h3 className="font-bold text-gray-900 text-lg">Wards & Communes</h3>
+        <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-full">{wards.length} found</span>
       </div>
 
       {loading ? (
         <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 text-red-600 animate-spin" /></div>
-      ) : districts.length === 0 ? (
+      ) : wards.length === 0 ? (
         <div className="bg-white p-6 rounded-xl border border-gray-200 text-center text-gray-400 text-sm flex flex-col items-center gap-2">
           <AlertCircle className="w-8 h-8 opacity-20" />
-          <p>No districts found for this location.</p>
+          <p>No wards found for this district.</p>
         </div>
       ) : (
         <div className="space-y-4 max-h-[800px] overflow-y-auto pr-1 custom-scrollbar pb-10">
-          {districts.map((item) => {
+          {wards.map((item) => {
             const imageUrl = (item.imgUrl && item.imgUrl.trim() !== '') ? item.imgUrl : DEFAULT_IMAGE;
 
             return (
@@ -90,10 +89,7 @@ export default function DistrictSidebar({ parentId }: DistrictSidebarProps) {
                       (e.target as HTMLImageElement).src = DEFAULT_IMAGE;
                     }}
                   />
-                  {/* Gradient overlay */}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-60"></div>
-
-                  {/* Badge Name on Image */}
                   <div className="absolute bottom-2 left-3 right-3 text-white">
                     <h4 className="font-bold text-sm line-clamp-1 shadow-sm">{item.name}</h4>
                   </div>
@@ -101,7 +97,6 @@ export default function DistrictSidebar({ parentId }: DistrictSidebarProps) {
 
                 {/* Content */}
                 <div className="p-3 flex-1 flex flex-col gap-2">
-                  {/* Stats Grid */}
                   <div className="grid grid-cols-2 gap-y-1 text-xs text-gray-600">
                     <div className="flex flex-col">
                       <span className="text-[10px] uppercase text-gray-400 font-bold">Avg Price</span>
@@ -122,21 +117,13 @@ export default function DistrictSidebar({ parentId }: DistrictSidebarProps) {
                     <span>{item.population ? item.population.toLocaleString() : 'N/A'} people</span>
                   </div>
 
-                  {/* Footer Actions */}
                   <div className="flex justify-between items-center mt-2">
-                    <Link
-                      href={`/admin/locations/${item.id}?type=DISTRICT`}
-                      className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded hover:bg-blue-100 transition-colors"
-                    >
-                      View Details
-                    </Link>
 
-                    {/* Nút Favorite đã xử lý logic */}
                     <button
                       onClick={(e) => handleToggleFavorite(e, item)}
                       className={`p-1.5 rounded-full transition-colors ${item.isFavorite
-                        ? 'bg-red-50 text-red-500'
-                        : 'text-gray-400 hover:bg-gray-100 hover:text-red-500'
+                          ? 'bg-red-50 text-red-500'
+                          : 'text-gray-400 hover:bg-gray-100 hover:text-red-500'
                         }`}
                     >
                       <Heart className={`w-4 h-4 ${item.isFavorite ? 'fill-current' : ''}`} />

@@ -21,6 +21,7 @@ const TimelineItem = ({ label, date, icon: Icon, colorClass }: any) => (
     </div>
 );
 
+// Helper render Status Badge
 const getStatusBadge = (status: string) => {
     switch (status) {
         case 'PAID': return <Badge variant="success">Paid</Badge>;
@@ -30,12 +31,30 @@ const getStatusBadge = (status: string) => {
     }
 }
 
+const getPaymentTypeBadge = (type: string) => {
+    switch (type) {
+        case 'DEPOSIT':
+            return <Badge variant="warning">Deposit</Badge>; 
+        case 'MONTHLY':
+            return <Badge variant="info">Monthly</Badge>;   
+        case 'FULL_PAY':
+            return <Badge variant="success">Full Pay</Badge>; 
+        case 'INSTALLMENT':
+            return <Badge variant="default">Installment</Badge>; 
+        case 'SALARY':
+            return <Badge variant="pink">Salary</Badge>;    
+        case 'BONUS':
+            return <Badge variant="gold">Bonus</Badge>;     
+        default:
+            return <Badge variant="default">{type.replace(/_/g, ' ')}</Badge>;
+    }
+}
+
 export default function TimelineTab({ data }: Props) {
     const [selectedPayment, setSelectedPayment] = useState<PaymentSummary | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 5;
 
-    // Sort payment: Mới nhất lên đầu hoặc theo installment
     const payments = [...(data.payments || [])].sort((a, b) =>
         (a.installmentNumber || 0) - (b.installmentNumber || 0)
     );
@@ -93,7 +112,11 @@ export default function TimelineTab({ data }: Props) {
                                             {item.installmentNumber || '-'}
                                         </td>
                                         <td className="px-6 py-4 font-bold text-gray-900">{formatCurrency(item.amount)}</td>
-                                        <td className="px-6 py-4"><Badge variant="blue">{item.paymentType}</Badge></td>
+
+                                        <td className="px-6 py-4">
+                                            {getPaymentTypeBadge(item.paymentType)}
+                                        </td>
+
                                         <td className="px-6 py-4">{getStatusBadge(item.status)}</td>
                                         <td className="px-6 py-4 text-gray-900">{formatDate(item.dueDate).split(',')[0]}</td>
                                         <td className="px-6 py-4 text-right">
