@@ -1,95 +1,147 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Wallet, Calendar, CreditCard, Download, Eye, Clock, Check, AlertCircle, ChevronRight, FileText } from 'lucide-react';
+import { Wallet, Calendar, CreditCard, Download, Eye, Clock, Check, AlertCircle, FileText, Loader2 } from 'lucide-react';
 import Badge from '@/app/components/ui/Badge';
 import Modal from '@/app/components/ui/Modal';
-import { paymentService, Payment as ApiPayment } from '@/lib/api/services/payment.service';
-import Skeleton from '@/app/components/ui/Skeleton';
+import { paymentService, PaymentListItem, PaymentDetailResponse } from '@/lib/api/services/payment.service';
+import { useAuth } from '@/contexts/AuthContext';
 
-type PaymentStatus = 'PENDING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
-type PaymentType = 'CONTRACT' | 'SERVICE_FEE';
+type PaymentStatus = 'PENDING' | 'SUCCESS' | 'FAILED' | 'CANCELLED' | 'OVERDUE' | 'SYSTEM_PENDING' | 'SYSTEM_SUCCESS';
 
-interface Payment {
-  id: string;
-  paymentNumber: string;
-  contractNumber: string;
-  propertyName: string;
-  amount: string;
-  dueDate: string;
-  paidDate: string | null;
-  status: PaymentStatus;
-  paymentType: PaymentType;
-  description: string;
-}
-
-const statusIcons: Record<PaymentStatus, typeof Clock> = {
+const statusIcons: Record<string, typeof Clock> = {
   PENDING: Clock,
-  COMPLETED: Check,
+  SYSTEM_PENDING: Clock,
+  SUCCESS: Check,
+  SYSTEM_SUCCESS: Check,
+  OVERDUE: AlertCircle,
   FAILED: AlertCircle,
   CANCELLED: AlertCircle,
 };
 
-const statusVariants: Record<PaymentStatus, 'warning' | 'success' | 'danger' | 'info'> = {
+const statusVariants: Record<string, 'warning' | 'success' | 'danger' | 'info'> = {
   PENDING: 'warning',
-  COMPLETED: 'success',
+  SYSTEM_PENDING: 'warning',
+  SUCCESS: 'success',
+  SYSTEM_SUCCESS: 'success',
+  OVERDUE: 'danger',
   FAILED: 'danger',
-  CANCELLED: 'danger',
+  CANCELLED: 'info',
 };
 
-export default function PaymentsPage() {
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
+const statusLabels: Record<string, string> = {
+  PENDING: 'Pending',
+  SYSTEM_PENDING: 'Processing',
+  SUCCESS: 'Paid',
+  SYSTEM_SUCCESS: 'Paid',
+  OVERDUE: 'Overdue',
+  FAILED: 'Failed',
+  CANCELLED: 'Cancelled',
+};
+
+export default function MyPaymentsPage() {
+  const { user } = useAuth();
+  const [payments, setPayments] = useState<PaymentListItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [totalItems, setTotalItems] = useState(0);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [selectedPayment, setSelectedPayment] = useState<PaymentDetailResponse | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [showPayModal, setShowPayModal] = useState(false);
+  const [payingPaymentId, setPayingPaymentId] = useState<string | null>(null);
+  const [processingPayment, setProcessingPayment] = useState(false);
   const [filter, setFilter] = useState<'all' | 'pending' | 'paid'>('all');
 
-  useEffect(() => {
-    loadPayments();
-  }, []);
+  const pageSize = 10;
+  
+  // Determine what payment types user can pay based on their role
+  const isOwner = user?.role === 'PROPERTY_OWNER';
+  const customerPayableTypes = ['DEPOSIT', 'MONTHLY', 'FULL_PAY', 'INSTALLMENT', 'ADVANCE'];
+  const ownerPayableTypes = ['SERVICE_FEE'];
 
-  const loadPayments = async () => {
-    setIsLoading(true);
+  // Fetch payments from API
+  useEffect(() => {
+    const fetchPayments = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        // Build status filter based on selected tab
+        const statuses = filter === 'pending' 
+          ? ['PENDING', 'SYSTEM_PENDING', 'OVERDUE'] 
+          : filter === 'paid' 
+            ? ['SUCCESS', 'SYSTEM_SUCCESS'] 
+            : undefined;
+
+        const res = await paymentService.getMyPayments({
+          page: currentPage,
+          size: pageSize,
+          statuses,
+        });
+        setPayments(res.data || []);
+        setTotalItems(res.paging?.total || 0);
+      } catch (err: any) {
+        console.error('Failed to fetch payments:', err);
+        setError('Failed to load payments. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPayments();
+  }, [currentPage, filter]);
+
+  // Calculate stats from fetched data
+  const totalPending = payments
+    .filter(p => p.status === 'PENDING' || p.status === 'SYSTEM_PENDING' || p.status === 'OVERDUE')
+    .reduce((sum, p) => sum + (p.amount || 0), 0);
+  const totalPaid = payments
+    .filter(p => p.status === 'SUCCESS' || p.status === 'SYSTEM_SUCCESS')
+    .reduce((sum, p) => sum + (p.amount || 0), 0);
+  const overdueCount = payments.filter(p => p.status === 'OVERDUE').length;
+
+  const handleViewDetail = async (paymentId: string) => {
+    setLoadingDetail(true);
     try {
-      const data = await paymentService.getPayments();
-      const mappedData: Payment[] = data.map(p => ({
-        id: p.id,
-        paymentNumber: p.id,
-        contractNumber: '',
-        propertyName: p.description,
-        amount: `$${p.amount.toLocaleString()}`,
-        dueDate: p.createdAt,
-        paidDate: p.status === 'COMPLETED' ? p.createdAt : null,
-        status: p.status,
-        paymentType: p.paymentType === 'CONTRACT' ? 'CONTRACT' : 'SERVICE_FEE',
-        description: p.description
-      }));
-      setPayments(mappedData);
-    } catch (error) {
-      console.error('Failed to load payments:', error);
+      const detail = await paymentService.getPaymentById(paymentId);
+      setSelectedPayment(detail);
+    } catch (err) {
+      console.error('Failed to fetch payment detail:', err);
     } finally {
-      setIsLoading(false);
+      setLoadingDetail(false);
     }
   };
 
-  const filteredPayments = payments.filter(p => {
-    if (filter === 'pending') return p.status === 'PENDING' || p.status === 'FAILED';
-    if (filter === 'paid') return p.status === 'COMPLETED';
-    return true;
-  });
+  const handlePay = (paymentId: string) => {
+    setPayingPaymentId(paymentId);
+    setShowPayModal(true);
+  };
 
-  // Stats
-  const totalPending = payments.filter(p => p.status === 'PENDING' || p.status === 'FAILED').reduce((sum, p) => sum + parseFloat(p.amount.replace(/[^0-9.]/g, '')), 0);
-  const totalPaid = payments.filter(p => p.status === 'COMPLETED').reduce((sum, p) => sum + parseFloat(p.amount.replace(/[^0-9.]/g, '')), 0);
-  const overdueCount = payments.filter(p => p.status === 'FAILED').length;
+  const confirmPayment = async () => {
+    if (!payingPaymentId) return;
+    
+    setProcessingPayment(true);
+    try {
+      const checkoutUrl = await paymentService.getPaymentLink(payingPaymentId);
+      // Redirect to payment gateway
+      window.location.href = checkoutUrl;
+    } catch (err: any) {
+      console.error('Failed to get payment link:', err);
+      alert('Failed to generate payment link. Please try again.');
+    } finally {
+      setProcessingPayment(false);
+    }
+  };
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <Skeleton height={60} />
-        <Skeleton height={400} />
-      </div>
-    );
-  }
+  const formatAmount = (amount: number) => {
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+  };
+
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return '-';
+    return new Date(dateStr).toLocaleDateString('vi-VN');
+  };
+
+  const totalPages = Math.ceil(totalItems / pageSize);
 
   return (
     <div className="space-y-6">
@@ -97,7 +149,7 @@ export default function PaymentsPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           <Wallet className="w-6 h-6 text-red-600" />
-          Payments
+          My Payments
         </h1>
         <p className="text-gray-500 text-sm mt-1">
           Manage your payment schedule and transaction history
@@ -110,7 +162,7 @@ export default function PaymentsPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-500">Total Pending</p>
-              <p className="text-2xl font-bold text-orange-600 mt-1">${totalPending.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-orange-600 mt-1">{formatAmount(totalPending)}</p>
             </div>
             <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
               <Clock className="w-6 h-6 text-orange-600" />
@@ -121,7 +173,7 @@ export default function PaymentsPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-500">Total Paid</p>
-              <p className="text-2xl font-bold text-green-600 mt-1">${totalPaid.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-green-600 mt-1">{formatAmount(totalPaid)}</p>
             </div>
             <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
               <Check className="w-6 h-6 text-green-600" />
@@ -143,124 +195,165 @@ export default function PaymentsPage() {
 
       {/* Filter */}
       <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1 w-fit">
-        <button
-          onClick={() => setFilter('all')}
-          className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-            filter === 'all' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600'
-          }`}
-        >
-          All
-        </button>
-        <button
-          onClick={() => setFilter('pending')}
-          className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-            filter === 'pending' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600'
-          }`}
-        >
-          Pending
-        </button>
-        <button
-          onClick={() => setFilter('paid')}
-          className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-            filter === 'paid' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600'
-          }`}
-        >
-          Paid
-        </button>
+        {(['all', 'pending', 'paid'] as const).map((f) => (
+          <button
+            key={f}
+            onClick={() => { setFilter(f); setCurrentPage(0); }}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors capitalize ${
+              filter === f ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600'
+            }`}
+          >
+            {f}
+          </button>
+        ))}
       </div>
+
+      {/* Error state */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+          {error}
+        </div>
+      )}
 
       {/* Payments List */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
-            <thead className="text-xs text-gray-700 uppercase bg-gray-50 border-b">
-              <tr>
-                <th className="px-6 py-4 font-medium">Payment</th>
-                <th className="px-6 py-4 font-medium">Description</th>
-                <th className="px-6 py-4 font-medium">Amount</th>
-                <th className="px-6 py-4 font-medium">Date</th>
-                <th className="px-6 py-4 font-medium">Status</th>
-                <th className="px-6 py-4 font-medium text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filteredPayments.map((payment) => {
-                const StatusIcon = statusIcons[payment.status];
-                return (
-                  <tr key={payment.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div>
-                        <p className="font-medium text-gray-900">{payment.paymentNumber}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">{payment.propertyName}</p>
-                        <p className="text-xs text-gray-400">{payment.contractNumber || 'N/A'}</p>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="text-sm text-gray-600">{payment.description}</p>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="font-bold text-gray-900">{payment.amount}</p>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-1 text-gray-600">
-                        <Calendar className="w-4 h-4 text-gray-400" />
-                        {payment.dueDate}
-                      </div>
-                      {payment.paidDate && (
-                        <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
-                          <Check className="w-3 h-3" /> Paid: {payment.paidDate}
-                        </p>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <Badge variant={statusVariants[payment.status]}>
-                        <StatusIcon className="w-3 h-3 mr-1" />
-                        {payment.status}
-                      </Badge>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => setSelectedPayment(payment)}
-                          className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                          title="View Details"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        {payment.status === 'COMPLETED' && (
-                          <button
-                            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                            title="Download Receipt"
-                          >
-                            <Download className="w-4 h-4" />
-                          </button>
-                        )}
-                        {(payment.status === 'PENDING' || payment.status === 'FAILED') && (
-                          <button
-                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
-                            title="Payment not available - contact support"
-                            disabled
-                          >
-                            <CreditCard className="w-3 h-3" />
-                            Pay
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Empty State */}
-        {filteredPayments.length === 0 && (
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="w-8 h-8 animate-spin text-red-600" />
+          </div>
+        ) : payments.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16">
             <Wallet className="w-16 h-16 text-gray-300 mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No payments found</h3>
-            <p className="text-gray-500 text-sm">Try changing your filter</p>
+            <p className="text-gray-500 text-sm">You don't have any payments yet</p>
           </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs text-gray-700 uppercase bg-gray-50 border-b">
+                  <tr>
+                    <th className="px-6 py-4 font-medium">Payment</th>
+                    <th className="px-6 py-4 font-medium">Type</th>
+                    {isOwner && <th className="px-6 py-4 font-medium">Payer</th>}
+                    <th className="px-6 py-4 font-medium">Amount</th>
+                    <th className="px-6 py-4 font-medium">Due Date</th>
+                    <th className="px-6 py-4 font-medium">Status</th>
+                    <th className="px-6 py-4 font-medium text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {payments.map((payment) => {
+                    const status = payment.status as PaymentStatus;
+                    const StatusIcon = statusIcons[status] || Clock;
+                    return (
+                      <tr key={payment.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4">
+                          <div>
+                            <p className="font-medium text-gray-900">{payment.id.slice(0, 8).toUpperCase()}</p>
+                            {payment.propertyTitle && (
+                              <p className="text-xs text-gray-500 mt-0.5">{payment.propertyTitle}</p>
+                            )}
+                            {payment.contractNumber && (
+                              <p className="text-xs text-gray-400">{payment.contractNumber}</p>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <Badge variant="info">{payment.paymentType}</Badge>
+                        </td>
+                        {isOwner && (
+                          <td className="px-6 py-4">
+                            <p className="text-sm text-gray-900">{payment.payerName || '-'}</p>
+                            {payment.payerRole && (
+                              <p className="text-xs text-gray-500">{payment.payerRole}</p>
+                            )}
+                          </td>
+                        )}
+                        <td className="px-6 py-4">
+                          <p className="font-bold text-gray-900">{formatAmount(payment.amount)}</p>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-1 text-gray-600">
+                            <Calendar className="w-4 h-4 text-gray-400" />
+                            {formatDate(payment.dueDate)}
+                          </div>
+                          {payment.paidTime && (
+                            <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                              <Check className="w-3 h-3" /> Paid: {formatDate(payment.paidTime)}
+                            </p>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          <Badge variant={statusVariants[status] || 'info'}>
+                            <StatusIcon className="w-3 h-3 mr-1" />
+                            {statusLabels[status] || status}
+                          </Badge>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => handleViewDetail(payment.id)}
+                              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                              title="View Details"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            {(status === 'SUCCESS' || status === 'SYSTEM_SUCCESS') && (
+                              <button
+                                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                                title="Download Receipt"
+                              >
+                                <Download className="w-4 h-4" />
+                              </button>
+                            )}
+                            {(status === 'PENDING' || status === 'SYSTEM_PENDING' || status === 'OVERDUE') && 
+                             // Only show Pay button for payment types the current user can pay
+                             // Check based on user role
+                             ((isOwner && ownerPayableTypes.includes(payment.paymentType)) ||
+                              (!isOwner && customerPayableTypes.includes(payment.paymentType))) && (
+                              <button
+                                onClick={() => handlePay(payment.id)}
+                                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+                              >
+                                <CreditCard className="w-3 h-3" />
+                                Pay
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-6 py-4 border-t">
+                <p className="text-sm text-gray-500">
+                  Showing {currentPage * pageSize + 1} - {Math.min((currentPage + 1) * pageSize, totalItems)} of {totalItems}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
+                    disabled={currentPage === 0}
+                    className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-200"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
+                    disabled={currentPage >= totalPages - 1}
+                    className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-200"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -274,29 +367,27 @@ export default function PaymentsPage() {
           <div className="space-y-4">
             {/* Status Banner */}
             <div className={`p-4 rounded-lg flex items-center gap-3 ${
-              selectedPayment.status === 'COMPLETED' ? 'bg-green-50 border border-green-200' :
-              selectedPayment.status === 'FAILED' ? 'bg-red-50 border border-red-200' :
+              selectedPayment.status === 'SUCCESS' || selectedPayment.status === 'SYSTEM_SUCCESS' ? 'bg-green-50 border border-green-200' :
+              selectedPayment.status === 'OVERDUE' || selectedPayment.status === 'FAILED' ? 'bg-red-50 border border-red-200' :
               'bg-yellow-50 border border-yellow-200'
             }`}>
-              {React.createElement(statusIcons[selectedPayment.status], {
+              {React.createElement(statusIcons[selectedPayment.status as PaymentStatus] || Clock, {
                 className: `w-5 h-5 ${
-                  selectedPayment.status === 'COMPLETED' ? 'text-green-600' :
-                  selectedPayment.status === 'FAILED' ? 'text-red-600' :
+                  selectedPayment.status === 'SUCCESS' || selectedPayment.status === 'SYSTEM_SUCCESS' ? 'text-green-600' :
+                  selectedPayment.status === 'OVERDUE' || selectedPayment.status === 'FAILED' ? 'text-red-600' :
                   'text-yellow-600'
                 }`
               })}
               <div>
                 <p className={`font-medium ${
-                  selectedPayment.status === 'COMPLETED' ? 'text-green-800' :
-                  selectedPayment.status === 'FAILED' ? 'text-red-800' :
+                  selectedPayment.status === 'SUCCESS' || selectedPayment.status === 'SYSTEM_SUCCESS' ? 'text-green-800' :
+                  selectedPayment.status === 'OVERDUE' || selectedPayment.status === 'FAILED' ? 'text-red-800' :
                   'text-yellow-800'
                 }`}>
-                  {selectedPayment.status === 'COMPLETED' ? 'Payment Completed' :
-                   selectedPayment.status === 'FAILED' ? 'Payment Failed' :
-                   'Payment Pending'}
+                  {statusLabels[selectedPayment.status as PaymentStatus] || selectedPayment.status}
                 </p>
-                {selectedPayment.paidDate && (
-                  <p className="text-sm text-green-700">Paid on {selectedPayment.paidDate}</p>
+                {selectedPayment.paidTime && (
+                  <p className="text-sm text-green-700">Paid on {formatDate(selectedPayment.paidTime)}</p>
                 )}
               </div>
             </div>
@@ -304,39 +395,58 @@ export default function PaymentsPage() {
             {/* Payment Info */}
             <div className="grid grid-cols-2 gap-4">
               <div className="p-3 bg-gray-50 rounded-lg">
-                <p className="text-xs text-gray-500">Payment Number</p>
-                <p className="font-medium text-gray-900">{selectedPayment.paymentNumber}</p>
+                <p className="text-xs text-gray-500">Payment ID</p>
+                <p className="font-medium text-gray-900">{selectedPayment.id.slice(0, 8).toUpperCase()}</p>
               </div>
               <div className="p-3 bg-gray-50 rounded-lg">
                 <p className="text-xs text-gray-500">Amount</p>
-                <p className="font-bold text-red-600 text-lg">{selectedPayment.amount}</p>
+                <p className="font-bold text-red-600 text-lg">{formatAmount(selectedPayment.amount)}</p>
               </div>
               <div className="p-3 bg-gray-50 rounded-lg">
                 <p className="text-xs text-gray-500">Due Date</p>
-                <p className="font-medium text-gray-900">{selectedPayment.dueDate}</p>
+                <p className="font-medium text-gray-900">{formatDate(selectedPayment.dueDate)}</p>
               </div>
               <div className="p-3 bg-gray-50 rounded-lg">
-                <p className="text-xs text-gray-500">Description</p>
-                <p className="text-sm text-gray-900">{selectedPayment.description}</p>
+                <p className="text-xs text-gray-500">Payment Type</p>
+                <Badge variant="info">{selectedPayment.paymentType}</Badge>
               </div>
             </div>
 
             {/* Contract Info */}
-            <div className="p-4 border rounded-lg">
-              <div className="flex items-center gap-2 mb-2">
-                <FileText className="w-4 h-4 text-gray-400" />
-                <p className="text-sm font-medium text-gray-900">Related Contract</p>
+            {selectedPayment.contractNumber && (
+              <div className="p-4 border rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <FileText className="w-4 h-4 text-gray-400" />
+                  <p className="text-sm font-medium text-gray-900">Related Contract</p>
+                </div>
+                <p className="text-sm text-gray-600">{selectedPayment.contractNumber}</p>
+                {selectedPayment.propertyTitle && (
+                  <p className="text-sm text-gray-500">{selectedPayment.propertyTitle}</p>
+                )}
               </div>
-              <p className="text-sm text-gray-600">{selectedPayment.contractNumber}</p>
-              <p className="text-sm text-gray-500">{selectedPayment.propertyName}</p>
-            </div>
+            )}
 
             {/* Actions */}
             <div className="flex gap-3 pt-4 border-t">
-              {selectedPayment.status === 'COMPLETED' && (
+              {(selectedPayment.status === 'SUCCESS' || selectedPayment.status === 'SYSTEM_SUCCESS') && (
                 <button className="flex-1 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex items-center justify-center gap-2">
                   <Download className="w-4 h-4" />
                   Download Receipt
+                </button>
+              )}
+              {(selectedPayment.status === 'PENDING' || selectedPayment.status === 'SYSTEM_PENDING' || selectedPayment.status === 'OVERDUE') &&
+               // Check if user can pay this type
+               ((isOwner && ownerPayableTypes.includes(selectedPayment.paymentType || '')) ||
+                (!isOwner && customerPayableTypes.includes(selectedPayment.paymentType || ''))) && (
+                <button
+                  onClick={() => {
+                    setSelectedPayment(null);
+                    handlePay(selectedPayment.id);
+                  }}
+                  className="flex-1 py-2.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors flex items-center justify-center gap-2"
+                >
+                  <CreditCard className="w-4 h-4" />
+                  Pay Now
                 </button>
               )}
             </div>
@@ -344,7 +454,62 @@ export default function PaymentsPage() {
         </Modal>
       )}
 
+      {/* Pay Modal (PayOS) */}
+      {showPayModal && payingPaymentId && (
+        <Modal
+          isOpen={showPayModal}
+          onClose={() => { setShowPayModal(false); setPayingPaymentId(null); }}
+          title="Complete Payment"
+        >
+          <div className="space-y-4">
+            {/* Payment Methods */}
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-3">Select Payment Method</p>
+              <div className="space-y-2">
+                <label className="flex items-center p-4 border border-gray-200 rounded-lg cursor-pointer hover:border-red-500 transition-colors">
+                  <input type="radio" name="payment" defaultChecked className="text-red-600" />
+                  <div className="ml-3 flex-1">
+                    <p className="font-medium text-gray-900">PayOS</p>
+                    <p className="text-xs text-gray-500">Pay with QR Code or Bank Transfer</p>
+                  </div>
+                  <img src="https://payos.vn/docs/img/logo.svg" alt="PayOS" className="h-6" />
+                </label>
+                <label className="flex items-center p-4 border border-gray-200 rounded-lg cursor-pointer hover:border-red-500 transition-colors opacity-50">
+                  <input type="radio" name="payment" disabled className="text-red-600" />
+                  <div className="ml-3 flex-1">
+                    <p className="font-medium text-gray-900">Credit Card</p>
+                    <p className="text-xs text-gray-500">Coming soon</p>
+                  </div>
+                  <CreditCard className="w-6 h-6 text-gray-400" />
+                </label>
+              </div>
+            </div>
 
+            {/* Actions */}
+            <div className="flex gap-3 pt-4">
+              <button
+                onClick={() => { setShowPayModal(false); setPayingPaymentId(null); }}
+                className="flex-1 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                disabled={processingPayment}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmPayment}
+                disabled={processingPayment}
+                className="flex-1 py-2.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {processingPayment ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <CreditCard className="w-4 h-4" />
+                )}
+                {processingPayment ? 'Redirecting...' : 'Proceed to Pay'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

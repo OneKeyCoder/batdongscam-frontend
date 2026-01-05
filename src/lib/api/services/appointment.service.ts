@@ -10,6 +10,7 @@ const APPOINTMENT_ENDPOINTS = {
   RATE: (id: string) => `/appointment/${id}/rate`,
   ADMIN_VIEWING_LIST: '/appointment/admin/viewing-list',
   ADMIN_VIEWING_DETAILS: (id: string) => `/appointment/admin-agent/viewing-details/${id}`,
+  AGENT_MY_VIEWING_LIST: '/assignments/my-viewing-list',
 };
 
 export interface CreateAppointmentRequest {
@@ -46,6 +47,11 @@ export interface ViewingCard {
   districtName?: string;
   cityName?: string;
   requestedDate: string;
+  // Rating info (for completed appointments)
+  rating?: number;
+  comment?: string;
+  // Agent info
+  agentName?: string;
 }
 
 export interface ViewingDetailsCustomer extends ViewingCard {
@@ -166,6 +172,9 @@ export interface ViewingListItem {
   customerTier?: string;
   salesAgentName?: string;
   salesAgentTier?: string;
+  // Rating info for completed appointments
+  rating?: number;
+  comment?: string;
 }
 
 export interface ViewingCardsFilters {
@@ -198,6 +207,18 @@ export interface ViewingListFilters {
   cityIds?: string[];
   districtIds?: string[];
   wardIds?: string[];
+  statusEnums?: ('PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED')[];
+}
+
+export interface AgentViewingListFilters {
+  page?: number;
+  limit?: number;
+  sortType?: 'asc' | 'desc';
+  sortBy?: string;
+  customerName?: string;
+  day?: number;
+  month?: number;
+  year?: number;
   statusEnums?: ('PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED')[];
 }
 
@@ -280,6 +301,17 @@ export const appointmentService = {
   },
 
   /**
+   * Get my viewing list with filters (Agent only - returns only their assigned viewings)
+   */
+  async getMyViewingList(filters?: AgentViewingListFilters): Promise<PaginatedResponse<ViewingListItem>> {
+    const response = await apiClient.get<PaginatedResponse<ViewingListItem>>(
+      APPOINTMENT_ENDPOINTS.AGENT_MY_VIEWING_LIST,
+      { params: filters }
+    );
+    return response.data;
+  },
+
+  /**
    * Get viewing details (Admin/Agent view)
    */
   async getViewingDetailsAdmin(id: string): Promise<ViewingDetailsAdmin> {
@@ -289,3 +321,4 @@ export const appointmentService = {
     return response.data.data;
   },
 };
+

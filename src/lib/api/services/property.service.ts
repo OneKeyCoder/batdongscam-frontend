@@ -10,8 +10,20 @@ const PROPERTY_ENDPOINTS = {
   ASSIGN_AGENT: (propertyId: string, agentId: string) => `/properties/${propertyId}/assign-agent/${agentId}`,
   PROPERTY_TYPES: '/public/locations/property-types',
   PROPERTY_TYPE_DETAIL: (id: string) => `/properties/types/${id}`,
+  DOCUMENT_TYPES: '/public/document-types',
   ADMIN_PROPERTIES: '/properties/cards'
 };
+
+// Document upload metadata - links document file to its type and details
+export interface DocumentUploadInfo {
+  documentTypeId: string;
+  documentNumber?: string;
+  documentName?: string;
+  issueDate?: string; // ISO date format
+  expiryDate?: string; // ISO date format
+  issuingAuthority?: string;
+  fileIndex: number; // Index of the corresponding file in the documents array
+}
 
 export interface CreatePropertyRequest {
   ownerId?: string;
@@ -31,10 +43,12 @@ export interface CreatePropertyRequest {
   yearBuilt?: number;
   priceAmount: number;
   amenities?: string;
+  documentMetadata?: DocumentUploadInfo[];
 }
 
 export interface UpdatePropertyRequest extends CreatePropertyRequest {
   mediaIdsToRemove?: string[];
+  documentIdsToRemove?: string[];
 }
 
 export interface UpdatePropertyStatusRequest {
@@ -54,6 +68,14 @@ export interface UpdatePropertyTypeRequest {
   avatar?: File;
   description?: string;
   isActive?: boolean;
+}
+
+// Document type response from API
+export interface DocumentTypeResponse {
+  id: string;
+  name: string;
+  description?: string;
+  isCompulsory: boolean;
 }
 
 //RESPONSE INTERFACES
@@ -205,6 +227,9 @@ export const propertyService = {
     if (filters.topK !== undefined) params.append('topK', filters.topK.toString());
     if (filters.ownerId) params.append('ownerId', filters.ownerId);
     if (filters.agentId) params.append('agentId', filters.agentId);
+    
+    // Always send hasAgent parameter to prevent backend null error
+    params.append('hasAgent', (filters.hasAgent ?? false).toString());
 
     const response = await apiClient.get<PaginatedResponse<PropertyCard>>(
       `${PROPERTY_ENDPOINTS.CARDS}?${params.toString()}`
@@ -229,7 +254,8 @@ export const propertyService = {
    */
   async createProperty(
     data: CreatePropertyRequest,
-    images?: File[]
+    images?: File[],
+    documents?: File[]
   ): Promise<PropertyDetails> {
     const formData = new FormData();
 
@@ -240,6 +266,13 @@ export const propertyService = {
     if (images && images.length > 0) {
       images.forEach(image => {
         formData.append('images', image);
+      });
+    }
+
+    // Add documents if provided
+    if (documents && documents.length > 0) {
+      documents.forEach(doc => {
+        formData.append('documents', doc);
       });
     }
 
@@ -262,7 +295,8 @@ export const propertyService = {
   async updateProperty(
     id: string,
     data: UpdatePropertyRequest,
-    images?: File[]
+    images?: File[],
+    documents?: File[]
   ): Promise<PropertyDetails> {
     const formData = new FormData();
 
@@ -273,6 +307,13 @@ export const propertyService = {
     if (images && images.length > 0) {
       images.forEach(image => {
         formData.append('images', image);
+      });
+    }
+
+    // Add documents if provided
+    if (documents && documents.length > 0) {
+      documents.forEach(doc => {
+        formData.append('documents', doc);
       });
     }
 
@@ -394,6 +435,25 @@ export const propertyService = {
     await apiClient.delete<SingleResponse<void>>(
       PROPERTY_ENDPOINTS.PROPERTY_TYPE_DETAIL(id)
     );
+  },
+
+  /**
+   * Get document types for property documents
+   * @param isCompulsory - If true, only returns compulsory document types
+   */
+  async getDocumentTypes(isCompulsory?: boolean): Promise<DocumentTypeResponse[]> {
+    const params = new URLSearchParams();
+    params.append('page', '1');
+    params.append('limit', '100'); // Get all document types
+    
+    if (isCompulsory !== undefined) {
+      params.append('isCompulsory', isCompulsory.toString());
+    }
+
+    const response = await apiClient.get<PaginatedResponse<DocumentTypeResponse>>(
+      `${PROPERTY_ENDPOINTS.DOCUMENT_TYPES}?${params.toString()}`
+    );
+    return response.data.data;
   },
 
   async getPropertyTypes(): Promise<PropertyTypeResponse[]> {

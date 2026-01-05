@@ -1,149 +1,181 @@
 import apiClient from '../client';
 import { PaginatedResponse, SingleResponse } from '../types';
 
-const NOTIFICATION_ENDPOINTS = {
-    MY_NOTIFICATIONS: '/notifications',
-    NOTIFICATION_DETAIL: (id: string) => `/notifications/${id}`,
-};
-
-
-// NotificationTypeEnum
 export type NotificationType =
-    | 'APPOINTMENT_BOOKED'
-    | 'APPOINTMENT_CANCELLED'
-    | 'APPOINTMENT_COMPLETED'
-    | 'APPOINTMENT_ASSIGNED'
-    | 'APPOINTMENT_REMINDER'
-    | 'CONTRACT_UPDATE'
-    | 'PAYMENT_DUE'
-    | 'VIOLATION_WARNING'
-    | 'SYSTEM_ALERT';
+  | 'APPOINTMENT_BOOKED'
+  | 'APPOINTMENT_CANCELLED'
+  | 'APPOINTMENT_COMPLETED'
+  | 'APPOINTMENT_ASSIGNED'
+  | 'APPOINTMENT_REMINDER'
+  | 'CONTRACT_UPDATE'
+  | 'PAYMENT_DUE'
+  | 'VIOLATION_WARNING'
+  | 'SYSTEM_ALERT'
+  | 'PAYMENT'
+  | 'VIEWING'
+  | 'CONTRACT'
+  | 'PROPERTY_APPROVAL'
+  | 'PROPERTY_REJECTION'
+  | 'SYSTEM'
+  | 'REPORT';
 
-// RelatedEntityTypeEnum
 export type RelatedEntityType =
-    | 'PROPERTY'
-    | 'CONTRACT'
-    | 'PAYMENT'
-    | 'APPOINTMENT'
-    | 'USER';
-
-// NotificationStatusEnum (for internal use if needed)
-export type NotificationStatus =
-    | 'PENDING'
-    | 'SENT'
-    | 'READ'
-    | 'FAILED';
-
-// === DTOs ===
+  | 'PROPERTY'
+  | 'CONTRACT'
+  | 'PAYMENT'
+  | 'APPOINTMENT'
+  | 'USER';
 
 /**
- * NotificationItem - Used in list view
- * Extends AbstractBaseDataResponse (id, createdAt, updatedAt)
+ * NotificationItem - Dùng cho List
+ * Lưu ý: Thống nhất dùng `isRead`. Nếu Backend trả về `read`, 
+ * hãy đổi tên ở đây hoặc map lại dữ liệu.
  */
 export interface NotificationItem {
-    id: string;
-    type: NotificationType;
-    title: string;
-    isRead: boolean;
-    createdAt: string;
-    updatedAt: string;
+  id: string;
+  type: NotificationType; // Dùng Enum thay vì string
+  title: string;
+  isRead: boolean; // Thống nhất dùng isRead cho chuẩn convention
+  createdAt: string;
+  updatedAt: string;
 }
 
 /**
- * NotificationDetails - Used in detail view
- * Extends AbstractBaseDataResponse (id, createdAt, updatedAt)
+ * NotificationDetails - Dùng cho Detail
  */
-export interface NotificationDetails {
-    id: string;
-    type: NotificationType;
-    title: string;
-    isRead: boolean;
-    message: string;
-    relatedEntityType?: RelatedEntityType;
-    relatedEntityId?: string;
-    imgUrl?: string;
-    readAt?: string; 
-    createdAt: string;
-    updatedAt: string;
+export interface NotificationDetails extends NotificationItem {
+  message: string;
+  relatedEntityType?: RelatedEntityType;
+  relatedEntityId?: string;
+  imgUrl?: string;
+  readAt?: string; 
 }
 
 /**
- * Filters for querying notifications
+ * Filters - (Lấy từ Friend để query linh hoạt hơn)
  */
 export interface NotificationFilters {
-    page?: number;
-    limit?: number;
-    sortType?: 'asc' | 'desc';
-    sortBy?: string;
+  page?: number;
+  limit?: number;
+  sortType?: 'asc' | 'desc';
+  sortBy?: string;
 }
 
-// === SERVICE ===
+const NOTIFICATION_ENDPOINTS = {
+  LIST: '/notifications',
+  DETAILS: (id: string) => `/notifications/${id}`,
+  MARK_READ: (id: string) => `/notifications/${id}/read`,
+  MARK_ALL_READ: '/notifications/read-all',
+  DELETE: (id: string) => `/notifications/${id}`,
+};
 
 export const notificationService = {
-    /**
-     * Get my notifications (paginated)
-     * GET /notifications
-     * 
-     * @param filters - Pagination and sorting options
-     * @returns Paginated list of notifications
-     */
-    async getMyNotifications(filters?: NotificationFilters): Promise<PaginatedResponse<NotificationItem>> {
-        const response = await apiClient.get<PaginatedResponse<NotificationItem>>(
-            NOTIFICATION_ENDPOINTS.MY_NOTIFICATIONS,
-            { params: filters }
-        );
-        return response.data;
-    },
+  /**
+   * Lấy danh sách thông báo (có phân trang & filter)
+   */
+  async getMyNotifications(filters?: NotificationFilters): Promise<PaginatedResponse<NotificationItem>> {
+    const params = {
+      page: 1,
+      limit: 20,
+      ...filters // Merge default params với filters truyền vào
+    };
 
-    /**
-     * Get notification details by ID
-     * GET /notifications/{notificationId}
-     
-     * @param notificationId - UUID of the notification
-     * @returns Detailed notification information
-     */
-    async getNotificationById(notificationId: string): Promise<NotificationDetails> {
-        const response = await apiClient.get<SingleResponse<NotificationDetails>>(
-            NOTIFICATION_ENDPOINTS.NOTIFICATION_DETAIL(notificationId)
-        );
-        return response.data.data;
-    },
+    const response = await apiClient.get<PaginatedResponse<NotificationItem>>(
+      NOTIFICATION_ENDPOINTS.LIST,
+      { params }
+    );
+    return response.data;
+  },
+
+  /**
+   * Alias for getMyNotifications (backward compatibility)
+   */
+  async getNotifications(page: number = 1, limit: number = 20): Promise<PaginatedResponse<NotificationItem>> {
+    return this.getMyNotifications({ page, limit });
+  },
+
+  /**
+   * Lấy chi tiết thông báo
+   */
+  async getNotificationById(id: string): Promise<NotificationDetails> {
+    const response = await apiClient.get<SingleResponse<NotificationDetails>>(
+      NOTIFICATION_ENDPOINTS.DETAILS(id)
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Alias for getNotificationById (backward compatibility)
+   */
+  async getNotificationDetails(id: string): Promise<NotificationDetails> {
+    return this.getNotificationById(id);
+  },
+
+  /**
+   * Đánh dấu đã đọc một thông báo
+   */
+  async markAsRead(id: string): Promise<NotificationDetails> {
+    const response = await apiClient.patch<SingleResponse<NotificationDetails>>(
+      NOTIFICATION_ENDPOINTS.MARK_READ(id)
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Đánh dấu đã đọc tất cả
+   */
+  async markAllAsRead(): Promise<void> {
+    await apiClient.patch(NOTIFICATION_ENDPOINTS.MARK_ALL_READ);
+  },
+
+  /**
+   * Xóa thông báo
+   */
+  async deleteNotification(id: string): Promise<void> {
+    await apiClient.delete(NOTIFICATION_ENDPOINTS.DELETE(id));
+  },
 };
 
-// === HELPER FUNCTIONS (Optional - for UI) ===
-
-/**
- * Get user-friendly label for notification type
- */
 export const getNotificationTypeLabel = (type: NotificationType): string => {
-    const labels: Record<NotificationType, string> = {
-        APPOINTMENT_BOOKED: 'Appointment Booked',
-        APPOINTMENT_CANCELLED: 'Appointment Cancelled',
-        APPOINTMENT_COMPLETED: 'Appointment Completed',
-        APPOINTMENT_ASSIGNED: 'Appointment Assigned',
-        APPOINTMENT_REMINDER: 'Appointment Reminder',
-        CONTRACT_UPDATE: 'Contract Update',
-        PAYMENT_DUE: 'Payment Due',
-        VIOLATION_WARNING: 'Violation Warning',
-        SYSTEM_ALERT: 'System Alert',
-    };
-    return labels[type] || type;
+  const labels: Record<NotificationType, string> = {
+    APPOINTMENT_BOOKED: 'Lịch hẹn đã đặt',
+    APPOINTMENT_CANCELLED: 'Lịch hẹn bị hủy',
+    APPOINTMENT_COMPLETED: 'Lịch hẹn hoàn thành',
+    APPOINTMENT_ASSIGNED: 'Đã phân công lịch hẹn',
+    APPOINTMENT_REMINDER: 'Nhắc nhở lịch hẹn',
+    CONTRACT_UPDATE: 'Cập nhật hợp đồng',
+    PAYMENT_DUE: 'Đến hạn thanh toán',
+    VIOLATION_WARNING: 'Cảnh báo vi phạm',
+    SYSTEM_ALERT: 'Thông báo hệ thống',
+    PAYMENT: 'Thanh toán',
+    VIEWING: 'Xem bất động sản',
+    CONTRACT: 'Hợp đồng',
+    PROPERTY_APPROVAL: 'Duyệt bất động sản',
+    PROPERTY_REJECTION: 'Từ chối bất động sản',
+    SYSTEM: 'Hệ thống',
+    REPORT: 'Báo cáo',
+  };
+  return labels[type] || type;
 };
 
-/**
- * Get color variant for notification type (for badges/styling)
- */
 export const getNotificationTypeVariant = (type: NotificationType): string => {
-    const variants: Record<NotificationType, string> = {
-        APPOINTMENT_BOOKED: 'success',
-        APPOINTMENT_CANCELLED: 'failed',
-        APPOINTMENT_COMPLETED: 'blue',
-        APPOINTMENT_ASSIGNED: 'pending',
-        APPOINTMENT_REMINDER: 'pending',
-        CONTRACT_UPDATE: 'blue',
-        PAYMENT_DUE: 'pending',
-        VIOLATION_WARNING: 'failed',
-        SYSTEM_ALERT: 'gray',
-    };
-    return variants[type] || 'default';
+  const variants: Record<NotificationType, string> = {
+    APPOINTMENT_BOOKED: 'success',
+    APPOINTMENT_CANCELLED: 'error',
+    APPOINTMENT_COMPLETED: 'processing',
+    APPOINTMENT_ASSIGNED: 'warning',
+    APPOINTMENT_REMINDER: 'warning',
+    CONTRACT_UPDATE: 'processing',
+    PAYMENT_DUE: 'error',
+    VIOLATION_WARNING: 'error',
+    SYSTEM_ALERT: 'default',
+    PAYMENT: 'success',
+    VIEWING: 'processing',
+    CONTRACT: 'processing',
+    PROPERTY_APPROVAL: 'success',
+    PROPERTY_REJECTION: 'error',
+    SYSTEM: 'default',
+    REPORT: 'warning',
+  };
+  return variants[type] || 'default';
 };

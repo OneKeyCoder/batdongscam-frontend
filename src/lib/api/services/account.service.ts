@@ -45,13 +45,22 @@ export interface UserProfile {
   frontIdPicturePath?: string;
   backIdPicturePath?: string;
   lastLoginAt?: string;
-  profile?: any;
+  profile?: {
+    totalListings: number;
+    totalBought: number;
+    totalRented: number;
+    totalAssignedProperties?: number; // For agents
+    totalSuccessfulDeals?: number; // For agents
+    employeeCode?: string; // For agents
+  };
   statisticMonth?: any;
   statisticAll?: any;
   propertyProfile?: {
     totalListings: number;
-    totalSolds: number;
-    totalRentals: number;
+    totalBought: number;
+    totalRented: number;
+    totalSolds?: number; // For property owners
+    totalRentals?: number; // For property owners
   };
 }
 
@@ -257,12 +266,26 @@ export const accountService = {
   },
 
   /**
-   * Update user profile
+   * Update user profile (uses PATCH /account/me with multipart/form-data)
    */
   async updateProfile(data: UpdateProfileRequest): Promise<UserProfile> {
-    const response = await apiClient.put<SingleResponse<UserProfile>>(
+    const formData = new FormData();
+    
+    if (data.firstName !== undefined) formData.append('firstName', data.firstName);
+    if (data.lastName !== undefined) formData.append('lastName', data.lastName);
+    if (data.phoneNumber !== undefined) formData.append('phoneNumber', data.phoneNumber);
+    if (data.dayOfBirth !== undefined) formData.append('dayOfBirth', data.dayOfBirth);
+    if (data.gender !== undefined) formData.append('gender', data.gender);
+    if (data.wardId !== undefined) formData.append('wardId', data.wardId);
+    
+    const response = await apiClient.patch<SingleResponse<UserProfile>>(
       ACCOUNT_ENDPOINTS.UPDATE_PROFILE,
-      data
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
     );
     return response.data.data;
   },

@@ -31,7 +31,7 @@ export default function BookViewingModal({ isOpen, onClose, propertyId, property
         propertyId,
         preferredDate: formData.preferredDate,
         preferredTime: formData.preferredTime,
-        message: formData.message,
+        message: formData.message || undefined,
       });
 
       alert('Viewing booked successfully! Check your viewings page for details.');

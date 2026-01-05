@@ -1,121 +1,107 @@
 'use client';
 
-import React, { useState } from 'react';
-import { FileText, Calendar, DollarSign, Eye, Download, Search, Filter, Building, Users } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { FileText, Calendar, DollarSign, Eye, Download, Search, Building, Loader2 } from 'lucide-react';
 import Badge from '@/app/components/ui/Badge';
 import Modal from '@/app/components/ui/Modal';
 import Link from 'next/link';
+import { contractService, ContractListItem, ContractDetailResponse } from '@/lib/api/services/contract.service';
+import Skeleton from '@/app/components/ui/Skeleton';
 
-type ContractStatus = 'Draft' | 'Pending' | 'Active' | 'Completed' | 'Cancelled';
-type ContractType = 'Sale' | 'Rental';
-
-interface Contract {
-  id: number;
-  contractNumber: string;
-  propertyName: string;
-  propertyImage: string;
-  propertyAddress: string;
-  contractType: ContractType;
-  status: ContractStatus;
-  customerName: string;
-  agentName: string;
-  startDate: string;
-  endDate: string;
-  totalValue: string;
-  receivedAmount: string;
-  pendingAmount: string;
-  commission: string;
-}
-
-// Mock data
-const mockContracts: Contract[] = [
-  {
-    id: 1,
-    contractNumber: 'CTR-2024-001',
-    propertyName: 'Modern Villa with Pool',
-    propertyImage: 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=400',
-    propertyAddress: 'District 7, Ho Chi Minh City',
-    contractType: 'Sale',
-    status: 'Active',
-    customerName: 'Nguyễn Văn Khách',
-    agentName: 'Trần Văn Agent',
-    startDate: '2024-01-15',
-    endDate: '2024-12-31',
-    totalValue: '$850,000',
-    receivedAmount: '$255,000',
-    pendingAmount: '$595,000',
-    commission: '$17,000',
-  },
-  {
-    id: 2,
-    contractNumber: 'CTR-2024-002',
-    propertyName: 'Luxury Apartment Downtown',
-    propertyImage: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=400',
-    propertyAddress: 'District 1, Ho Chi Minh City',
-    contractType: 'Rental',
-    status: 'Active',
-    customerName: 'Lê Thị Customer',
-    agentName: 'Phạm Thị Agent',
-    startDate: '2024-02-01',
-    endDate: '2025-01-31',
-    totalValue: '$14,400/year',
-    receivedAmount: '$2,400',
-    pendingAmount: '$12,000',
-    commission: '$1,200',
-  },
-  {
-    id: 3,
-    contractNumber: 'CTR-2023-015',
-    propertyName: 'Cozy Studio Near Park',
-    propertyImage: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=400',
-    propertyAddress: 'Binh Thanh District',
-    contractType: 'Rental',
-    status: 'Completed',
-    customerName: 'Phạm Văn Tenant',
-    agentName: 'Vũ Văn Agent',
-    startDate: '2023-01-01',
-    endDate: '2023-12-31',
-    totalValue: '$5,400/year',
-    receivedAmount: '$5,400',
-    pendingAmount: '$0',
-    commission: '$540',
-  },
-];
+type ContractStatus = 'DRAFT' | 'PENDING_SIGNING' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
 
 const statusVariants: Record<ContractStatus, 'default' | 'warning' | 'info' | 'success' | 'danger'> = {
-  Draft: 'default',
-  Pending: 'warning',
-  Active: 'info',
-  Completed: 'success',
-  Cancelled: 'danger',
+  DRAFT: 'default',
+  PENDING_SIGNING: 'warning',
+  ACTIVE: 'info',
+  COMPLETED: 'success',
+  CANCELLED: 'danger',
+};
+
+const statusLabels: Record<ContractStatus, string> = {
+  DRAFT: 'Draft',
+  PENDING_SIGNING: 'Pending',
+  ACTIVE: 'Active',
+  COMPLETED: 'Completed',
+  CANCELLED: 'Cancelled',
 };
 
 export default function OwnerContractsPage() {
-  const [contracts] = useState<Contract[]>(mockContracts);
-  const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
+  const [contracts, setContracts] = useState<ContractListItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedContract, setSelectedContract] = useState<ContractDetailResponse | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
   const [filter, setFilter] = useState<'all' | 'active' | 'completed'>('all');
   const [searchTerm, setSearchTerm] = useState('');
 
+  useEffect(() => {
+    loadContracts();
+  }, []);
+
+  const loadContracts = async () => {
+    setIsLoading(true);
+    try {
+      const response = await contractService.getMyOwnerContracts();
+      setContracts(response.data || []);
+    } catch (error) {
+      console.error('Failed to load contracts:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const filteredContracts = contracts.filter(c => {
-    const matchesSearch = c.propertyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const matchesSearch = c.propertyTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           c.contractNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          c.customerName.toLowerCase().includes(searchTerm.toLowerCase());
+                          `${c.customerFirstName} ${c.customerLastName}`.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = 
       filter === 'all' ? true :
-      filter === 'active' ? (c.status === 'Active' || c.status === 'Pending') :
-      filter === 'completed' ? (c.status === 'Completed' || c.status === 'Cancelled') :
+      filter === 'active' ? (c.status === 'ACTIVE' || c.status === 'PENDING_SIGNING') :
+      filter === 'completed' ? (c.status === 'COMPLETED' || c.status === 'CANCELLED') :
       true;
     return matchesSearch && matchesFilter;
   });
 
+  const handleViewDetail = async (contractId: string) => {
+    setLoadingDetail(true);
+    try {
+      const detail = await contractService.getContractById(contractId);
+      setSelectedContract(detail);
+    } catch (error) {
+      console.error('Failed to load contract details:', error);
+      alert('Failed to load contract details');
+    } finally {
+      setLoadingDetail(false);
+    }
+  };
+
   // Calculate stats
-  const totalActive = contracts.filter(c => c.status === 'Active').length;
+  const totalActive = contracts.filter(c => c.status === 'ACTIVE').length;
   const totalRevenue = contracts
-    .filter(c => c.status !== 'Cancelled')
-    .reduce((sum, c) => sum + parseFloat(c.receivedAmount.replace(/[^0-9.]/g, '')), 0);
+    .filter(c => c.status === 'COMPLETED' || c.status === 'ACTIVE')
+    .reduce((sum, c) => sum + (c.totalContractAmount || 0), 0);
   const totalPending = contracts
-    .filter(c => c.status === 'Active' || c.status === 'Pending')
-    .reduce((sum, c) => sum + parseFloat(c.pendingAmount.replace(/[^0-9.]/g, '')), 0);
+    .filter(c => c.status === 'ACTIVE' || c.status === 'PENDING_SIGNING')
+    .reduce((sum, c) => sum + (c.totalContractAmount || 0), 0);
+
+  const formatAmount = (amount: number) => {
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+  };
+
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return 'N/A';
+    return new Date(dateStr).toLocaleDateString('vi-VN');
+  };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <Skeleton height={60} />
+        <Skeleton height={120} />
+        <Skeleton height={400} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -148,8 +134,8 @@ export default function OwnerContractsPage() {
         <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-500">Total Received</p>
-              <p className="text-2xl font-bold text-green-600 mt-1">${totalRevenue.toLocaleString()}</p>
+              <p className="text-sm text-gray-500">Total Contract Value</p>
+              <p className="text-2xl font-bold text-green-600 mt-1">{formatAmount(totalRevenue)}</p>
             </div>
             <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
               <DollarSign className="w-6 h-6 text-green-600" />
@@ -160,7 +146,7 @@ export default function OwnerContractsPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-500">Pending Amount</p>
-              <p className="text-2xl font-bold text-orange-600 mt-1">${totalPending.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-orange-600 mt-1">{formatAmount(totalPending)}</p>
             </div>
             <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
               <DollarSign className="w-6 h-6 text-orange-600" />
@@ -199,89 +185,81 @@ export default function OwnerContractsPage() {
 
       {/* Contracts List */}
       <div className="space-y-4">
-        {filteredContracts.map((contract) => (
-          <div 
-            key={contract.id}
-            className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden"
-          >
-            <div className="flex flex-col lg:flex-row">
-              {/* Property Image */}
-              <div className="w-full lg:w-48 h-40 lg:h-auto shrink-0">
-                <img
-                  src={contract.propertyImage}
-                  alt={contract.propertyName}
-                  className="w-full h-full object-cover"
-                />
+        {filteredContracts.map((contract) => {
+          const status = contract.status as ContractStatus;
+          return (
+            <div 
+              key={contract.id}
+              className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden p-5"
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs text-gray-500">{contract.contractNumber}</span>
+                  </div>
+                  <h3 className="font-bold text-gray-900 text-lg">{contract.propertyTitle}</h3>
+                  <p className="text-sm text-gray-500 mt-1">{contract.propertyAddress}</p>
+                </div>
+                <div className="flex flex-col items-end gap-2">
+                  <Badge variant={contract.contractType === 'PURCHASE' ? 'sale' : 'rental'}>
+                    {contract.contractType === 'PURCHASE' ? 'Sale' : 'Rental'}
+                  </Badge>
+                  <Badge variant={statusVariants[status]}>
+                    {statusLabels[status] || status}
+                  </Badge>
+                </div>
               </div>
 
-              {/* Content */}
-              <div className="flex-1 p-5">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs text-gray-500">{contract.contractNumber}</span>
-                    </div>
-                    <h3 className="font-bold text-gray-900 text-lg">{contract.propertyName}</h3>
-                    <p className="text-sm text-gray-500 mt-1">{contract.propertyAddress}</p>
-                  </div>
-                  <div className="flex flex-col items-end gap-2">
-                    <Badge variant={contract.contractType === 'Sale' ? 'sale' : 'rental'}>
-                      {contract.contractType}
-                    </Badge>
-                    <Badge variant={statusVariants[contract.status]}>
-                      {contract.status}
-                    </Badge>
-                  </div>
+              {/* Info Grid */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 p-4 bg-gray-50 rounded-lg">
+                <div>
+                  <p className="text-xs text-gray-500">Customer</p>
+                  <p className="text-sm font-medium text-gray-900 mt-1">
+                    {`${contract.customerFirstName || ''} ${contract.customerLastName || ''}`.trim() || 'N/A'}
+                  </p>
                 </div>
+                <div>
+                  <p className="text-xs text-gray-500">Total Value</p>
+                  <p className="text-sm font-bold text-red-600 mt-1">{formatAmount(contract.totalContractAmount)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Start Date</p>
+                  <p className="text-sm font-medium text-gray-900 mt-1 flex items-center gap-1">
+                    <Calendar className="w-3 h-3 text-gray-400" />
+                    {formatDate(contract.startDate)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">End Date</p>
+                  <p className="text-sm font-medium text-gray-900 mt-1">{formatDate(contract.endDate)}</p>
+                </div>
+              </div>
 
-                {/* Info Grid */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 p-4 bg-gray-50 rounded-lg">
-                  <div>
-                    <p className="text-xs text-gray-500">Customer</p>
-                    <p className="text-sm font-medium text-gray-900 flex items-center gap-1 mt-1">
-                      <Users className="w-3 h-3 text-gray-400" />
-                      {contract.customerName}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500">Total Value</p>
-                    <p className="text-sm font-bold text-red-600 mt-1">{contract.totalValue}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500">Received</p>
-                    <p className="text-sm font-medium text-green-600 mt-1">{contract.receivedAmount}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500">Pending</p>
-                    <p className="text-sm font-medium text-orange-600 mt-1">{contract.pendingAmount}</p>
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex flex-wrap items-center gap-2 mt-4 pt-4 border-t border-gray-100">
-                  <button
-                    onClick={() => setSelectedContract(contract)}
-                    className="flex items-center gap-1 px-4 py-2 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-                  >
-                    <Eye className="w-4 h-4" />
-                    View Details
-                  </button>
-                  <button className="flex items-center gap-1 px-4 py-2 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
-                    <Download className="w-4 h-4" />
-                    Download PDF
-                  </button>
-                  <Link
-                    href="/owner/payments"
-                    className="flex items-center gap-1 px-4 py-2 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
-                  >
-                    <DollarSign className="w-4 h-4" />
-                    View Payments
-                  </Link>
-                </div>
+              {/* Actions */}
+              <div className="flex flex-wrap items-center gap-2 mt-4 pt-4 border-t border-gray-100">
+                <button
+                  onClick={() => handleViewDetail(contract.id)}
+                  disabled={loadingDetail}
+                  className="flex items-center gap-1 px-4 py-2 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {loadingDetail ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
+                  View Details
+                </button>
+                <button className="flex items-center gap-1 px-4 py-2 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+                  <Download className="w-4 h-4" />
+                  Download PDF
+                </button>
+                <Link
+                  href="/owner/payments"
+                  className="flex items-center gap-1 px-4 py-2 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+                >
+                  <DollarSign className="w-4 h-4" />
+                  View Payments
+                </Link>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Empty State */}
@@ -302,24 +280,17 @@ export default function OwnerContractsPage() {
         >
           <div className="space-y-4">
             {/* Property Info */}
-            <div className="flex gap-4 p-4 bg-gray-50 rounded-lg">
-              <img
-                src={selectedContract.propertyImage}
-                alt={selectedContract.propertyName}
-                className="w-24 h-24 rounded-lg object-cover"
-              />
-              <div>
-                <p className="text-xs text-gray-500">{selectedContract.contractNumber}</p>
-                <h4 className="font-bold text-gray-900">{selectedContract.propertyName}</h4>
-                <p className="text-sm text-gray-500 mt-1">{selectedContract.propertyAddress}</p>
-                <div className="flex gap-2 mt-2">
-                  <Badge variant={selectedContract.contractType === 'Sale' ? 'sale' : 'rental'}>
-                    {selectedContract.contractType}
-                  </Badge>
-                  <Badge variant={statusVariants[selectedContract.status]}>
-                    {selectedContract.status}
-                  </Badge>
-                </div>
+            <div className="p-4 bg-gray-50 rounded-lg">
+              <p className="text-xs text-gray-500">{selectedContract.contractNumber}</p>
+              <h4 className="font-bold text-gray-900">{selectedContract.propertyTitle}</h4>
+              <p className="text-sm text-gray-500 mt-1">{selectedContract.propertyAddress}</p>
+              <div className="flex gap-2 mt-2">
+                <Badge variant={selectedContract.contractType === 'PURCHASE' ? 'sale' : 'rental'}>
+                  {selectedContract.contractType === 'PURCHASE' ? 'Sale' : 'Rental'}
+                </Badge>
+                <Badge variant={statusVariants[selectedContract.status as ContractStatus]}>
+                  {statusLabels[selectedContract.status as ContractStatus] || selectedContract.status}
+                </Badge>
               </div>
             </div>
 
@@ -327,19 +298,21 @@ export default function OwnerContractsPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="p-3 bg-gray-50 rounded-lg">
                 <p className="text-xs text-gray-500">Customer</p>
-                <p className="font-medium text-gray-900">{selectedContract.customerName}</p>
+                <p className="font-medium text-gray-900">{`${selectedContract.customerFirstName} ${selectedContract.customerLastName}`}</p>
+                <p className="text-xs text-gray-500">{selectedContract.customerPhone}</p>
               </div>
               <div className="p-3 bg-gray-50 rounded-lg">
                 <p className="text-xs text-gray-500">Agent</p>
-                <p className="font-medium text-gray-900">{selectedContract.agentName}</p>
+                <p className="font-medium text-gray-900">{`${selectedContract.agentFirstName} ${selectedContract.agentLastName}`}</p>
+                <p className="text-xs text-gray-500">{selectedContract.agentPhone}</p>
               </div>
               <div className="p-3 bg-gray-50 rounded-lg">
                 <p className="text-xs text-gray-500">Start Date</p>
-                <p className="font-medium text-gray-900">{selectedContract.startDate}</p>
+                <p className="font-medium text-gray-900">{formatDate(selectedContract.startDate)}</p>
               </div>
               <div className="p-3 bg-gray-50 rounded-lg">
                 <p className="text-xs text-gray-500">End Date</p>
-                <p className="font-medium text-gray-900">{selectedContract.endDate}</p>
+                <p className="font-medium text-gray-900">{formatDate(selectedContract.endDate)}</p>
               </div>
             </div>
 
@@ -349,18 +322,26 @@ export default function OwnerContractsPage() {
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <p className="text-xs text-gray-500">Total Value</p>
-                  <p className="font-bold text-red-600">{selectedContract.totalValue}</p>
+                  <p className="font-bold text-red-600">{formatAmount(selectedContract.totalContractAmount)}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">Received</p>
-                  <p className="font-bold text-green-600">{selectedContract.receivedAmount}</p>
+                  <p className="text-xs text-gray-500">Deposit</p>
+                  <p className="font-bold text-green-600">{formatAmount(selectedContract.depositAmount)}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">Your Commission</p>
-                  <p className="font-bold text-purple-600">{selectedContract.commission}</p>
+                  <p className="text-xs text-gray-500">Remaining</p>
+                  <p className="font-bold text-orange-600">{formatAmount(selectedContract.remainingAmount)}</p>
                 </div>
               </div>
             </div>
+
+            {/* Special Terms */}
+            {selectedContract.specialTerms && (
+              <div>
+                <h5 className="text-sm font-semibold text-gray-900 mb-2">Special Terms</h5>
+                <p className="text-sm text-gray-600 p-3 bg-gray-50 rounded-lg">{selectedContract.specialTerms}</p>
+              </div>
+            )}
           </div>
         </Modal>
       )}

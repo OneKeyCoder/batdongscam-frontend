@@ -3,11 +3,13 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Building, MapPin, Bed, Bath, Square, Heart, Share2, Phone, Mail, Calendar, ChevronLeft, ChevronRight, Star, User, Check, Clock, Shield, Menu, X, Loader2, AlertCircle, Edit, FileText, Trash2, Eye, Download } from 'lucide-react';
+import { Building, MapPin, Bed, Bath, Square, Heart, Share2, Phone, Mail, Calendar, ChevronLeft, ChevronRight, Star, User, Check, Clock, Shield, Menu, X, Loader2, AlertCircle, Edit, FileText, Trash2, Eye, Download, AlertTriangle } from 'lucide-react';
 import NavBar from '@/app/components/layout/NavBar';
 import Modal from '@/app/components/ui/Modal';
+import Badge from '@/app/components/ui/Badge';
 import Footer from '@/app/components/layout/Footer';
 import { propertyService, PropertyDetails } from '@/lib/api/services/property.service';
+import { appointmentService } from '@/lib/api/services/appointment.service';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function PropertyDetailPage() {
@@ -27,15 +29,16 @@ export default function PropertyDetailPage() {
   const [previewDocument, setPreviewDocument] = useState<{url: string; name: string} | null>(null);
   const { user } = useAuth();
   
-  // Booking form state
+  // Booking form state - simplified to match backend API
   const [bookingForm, setBookingForm] = useState({
     date: '',
     time: '',
-    name: '',
-    phone: '',
-    email: '',
-    message: '',
+    customerRequirements: '',
   });
+  const [isBooking, setIsBooking] = useState(false);
+  const [bookingError, setBookingError] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [bookingSuccess, setBookingSuccess] = useState(false);
 
   // Fetch property details
   useEffect(() => {
@@ -74,11 +77,29 @@ export default function PropertyDetailPage() {
     setCurrentImage((prev) => (prev - 1 + property.mediaList.length) % property.mediaList.length);
   };
 
-  const handleBooking = (e: React.FormEvent) => {
+  const handleBooking = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Booking:', bookingForm);
-    alert('Viewing request submitted successfully!');
-    setShowBookingModal(false);
+    if (!propertyId || !bookingForm.date || !bookingForm.time) return;
+    
+    setIsBooking(true);
+    setBookingError('');
+    
+    try {
+      await appointmentService.createAppointment({
+        propertyId,
+        preferredDate: bookingForm.date,
+        preferredTime: bookingForm.time,
+        message: bookingForm.customerRequirements || undefined,
+      });
+      
+      setBookingSuccess(true);
+      setBookingForm({ date: '', time: '', customerRequirements: '' });
+    } catch (err: any) {
+      console.error('Failed to book appointment:', err);
+      setBookingError(err.response?.data?.message || 'Failed to book viewing. Please try again.');
+    } finally {
+      setIsBooking(false);
+    }
   };
 
   const formatPrice = (amount: number, transactionType: string) => {
@@ -182,6 +203,17 @@ export default function PropertyDetailPage() {
             >
               <Heart className={`w-5 h-5 ${isFavorite ? 'fill-red-500 text-red-500' : 'text-gray-600'}`} />
             </button>
+
+            {/* Report a Violation - visible to logged in users (except owner) */}
+            {user && user.id !== property.owner.id && (
+              <Link
+                href={`/my/reports?type=Property&targetId=${property.id}`}
+                className="w-10 h-10 bg-white rounded-full flex items-center justify-center hover:bg-yellow-50 transition-colors shadow-lg group"
+                title="Report a Violation"
+              >
+                <AlertTriangle className="w-5 h-5 text-gray-600 group-hover:text-yellow-600" />
+              </Link>
+            )}
             
             {/* Edit & Delete - Only for owner */}
             {user && user.id === property.owner.id && (
@@ -193,15 +225,22 @@ export default function PropertyDetailPage() {
                   <Edit className="w-5 h-5 text-gray-600" />
                 </Link>
                 <button
-                  onClick={() => {
-                    if (confirm('Are you sure you want to delete this property?')) {
-                      // TODO: Call delete API
-                      alert('Property deleted!');
+                  onClick={async () => {
+                    if (!confirm('Are you sure you want to delete this property?')) return;
+                    setIsDeleting(true);
+                    try {
+                      await propertyService.deleteProperty(property.id);
+                      window.location.href = '/my/properties';
+                    } catch (err: any) {
+                      alert(err.response?.data?.message || 'Failed to delete property');
+                    } finally {
+                      setIsDeleting(false);
                     }
                   }}
-                  className="w-10 h-10 bg-white rounded-full flex items-center justify-center hover:bg-red-50 transition-colors shadow-lg group"
+                  disabled={isDeleting}
+                  className="w-10 h-10 bg-white rounded-full flex items-center justify-center hover:bg-red-50 transition-colors shadow-lg group disabled:opacity-50"
                 >
-                  <Trash2 className="w-5 h-5 text-gray-600 group-hover:text-red-600" />
+                  {isDeleting ? <Loader2 className="w-5 h-5 animate-spin text-gray-600" /> : <Trash2 className="w-5 h-5 text-gray-600 group-hover:text-red-600" />}
                 </button>
               </>
             )}
@@ -209,11 +248,9 @@ export default function PropertyDetailPage() {
 
           {/* Type Badge */}
           <div className="absolute top-4 left-4">
-            <span className={`px-4 py-2 text-sm font-bold rounded-full ${
-              property.transactionType === 'SALE' ? 'bg-green-500 text-white' : 'bg-blue-500 text-white'
-            }`}>
-              For {property.transactionType === 'SALE' ? 'Sale' : 'Rent'}
-            </span>
+            <Badge variant={property.transactionType === 'SALE' ? 'danger' : 'info'} className="!px-4 !py-2 !text-sm">
+              FOR {property.transactionType === 'SALE' ? 'SALE' : 'RENT'}
+            </Badge>
           </div>
         </div>
 
@@ -466,94 +503,94 @@ export default function PropertyDetailPage() {
       {/* Booking Modal */}
       <Modal
         isOpen={showBookingModal}
-        onClose={() => setShowBookingModal(false)}
+        onClose={() => {
+          setShowBookingModal(false);
+          setBookingSuccess(false);
+          setBookingError('');
+        }}
         title="Book a Viewing"
       >
-        <form onSubmit={handleBooking} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+        {bookingSuccess ? (
+          <div className="text-center py-8">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Check className="w-8 h-8 text-green-600" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Booking Submitted!</h3>
+            <p className="text-gray-600 mb-6">
+              Your viewing request has been submitted successfully. We will contact you shortly to confirm the appointment.
+            </p>
+            <button
+              onClick={() => {
+                setShowBookingModal(false);
+                setBookingSuccess(false);
+              }}
+              className="px-6 py-2.5 bg-red-600 text-white font-medium rounded-xl hover:bg-red-700 transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={handleBooking} className="space-y-4">
+            {bookingError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
+                {bookingError}
+              </div>
+            )}
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Preferred Date *</label>
+                <input
+                  type="date"
+                  value={bookingForm.date}
+                  onChange={(e) => setBookingForm({ ...bookingForm, date: e.target.value })}
+                  min={new Date().toISOString().split('T')[0]}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Preferred Time *</label>
+                <select
+                  value={bookingForm.time}
+                  onChange={(e) => setBookingForm({ ...bookingForm, time: e.target.value })}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+                  required
+                >
+                  <option value="">Select time</option>
+                  <option value="09:00">09:00 AM</option>
+                  <option value="10:00">10:00 AM</option>
+                  <option value="11:00">11:00 AM</option>
+                  <option value="12:00">12:00 PM</option>
+                  <option value="14:00">02:00 PM</option>
+                  <option value="15:00">03:00 PM</option>
+                  <option value="16:00">04:00 PM</option>
+                  <option value="17:00">05:00 PM</option>
+                </select>
+              </div>
+            </div>
+
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Preferred Date</label>
-              <input
-                type="date"
-                value={bookingForm.date}
-                onChange={(e) => setBookingForm({ ...bookingForm, date: e.target.value })}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
-                required
+              <label className="block text-sm font-medium text-gray-700 mb-1">Your Requirements (Optional)</label>
+              <textarea
+                value={bookingForm.customerRequirements}
+                onChange={(e) => setBookingForm({ ...bookingForm, customerRequirements: e.target.value })}
+                placeholder="Any special requirements or questions about the property?"
+                rows={3}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500 resize-none"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Preferred Time</label>
-              <select
-                value={bookingForm.time}
-                onChange={(e) => setBookingForm({ ...bookingForm, time: e.target.value })}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
-                required
-              >
-                <option value="">Select time</option>
-                <option value="09:00">09:00 AM</option>
-                <option value="10:00">10:00 AM</option>
-                <option value="11:00">11:00 AM</option>
-                <option value="14:00">02:00 PM</option>
-                <option value="15:00">03:00 PM</option>
-                <option value="16:00">04:00 PM</option>
-              </select>
-            </div>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-            <input
-              type="text"
-              value={bookingForm.name}
-              onChange={(e) => setBookingForm({ ...bookingForm, name: e.target.value })}
-              placeholder="Enter your full name"
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
-              required
-            />
-          </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
-            <input
-              type="tel"
-              value={bookingForm.phone}
-              onChange={(e) => setBookingForm({ ...bookingForm, phone: e.target.value })}
-              placeholder="Enter your phone number"
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input
-              type="email"
-              value={bookingForm.email}
-              onChange={(e) => setBookingForm({ ...bookingForm, email: e.target.value })}
-              placeholder="Enter your email"
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Message (Optional)</label>
-            <textarea
-              value={bookingForm.message}
-              onChange={(e) => setBookingForm({ ...bookingForm, message: e.target.value })}
-              placeholder="Any questions or special requests?"
-              rows={3}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500 resize-none"
-            />
-          </div>
-
-          <button
-            type="submit"
-            className="w-full py-3 bg-red-600 text-white font-medium rounded-xl hover:bg-red-700 transition-colors"
-          >
-            Submit Request
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={isBooking}
+              className="w-full py-3 bg-red-600 text-white font-medium rounded-xl hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {isBooking && <Loader2 className="w-4 h-4 animate-spin" />}
+              {isBooking ? 'Submitting...' : 'Submit Request'}
+            </button>
+          </form>
+        )}
       </Modal>
 
       {/* Document Preview Modal */}
@@ -572,6 +609,16 @@ export default function PropertyDetailPage() {
                 {previewDocument.name}
               </h3>
               <div className="flex items-center gap-2">
+                {/* Open in new tab */}
+                <a
+                  href={previewDocument.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                >
+                  <Eye className="w-4 h-4" />
+                  Open in New Tab
+                </a>
                 <a
                   href={previewDocument.url}
                   target="_blank"

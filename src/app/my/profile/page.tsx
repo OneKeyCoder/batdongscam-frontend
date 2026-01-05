@@ -2,11 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { Mail, Phone, Calendar, MapPin, Eye, EyeOff, Edit2, Building, DollarSign, Camera } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
+import { Mail, Phone, Calendar, MapPin, Eye, EyeOff, Edit2, Building, DollarSign, Camera, Trash2, AlertTriangle, Loader2, Save, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { accountService } from '@/lib/api/services/account.service';
 import Skeleton from '@/app/components/ui/Skeleton';
+import Modal from '@/app/components/ui/Modal';
 
 const tabs = [
   { key: 'properties', label: 'Properties', href: '/customer/properties' },
@@ -20,13 +21,20 @@ const tabs = [
 
 export default function CustomerProfilePage() {
   const pathname = usePathname();
-  const { user, setUser } = useAuth();
+  const router = useRouter();
+  const { user, setUser, logout } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [showPhone, setShowPhone] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  
+  // Delete account state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
   
   const [formData, setFormData] = useState({
     firstName: '',
@@ -73,6 +81,7 @@ export default function CustomerProfilePage() {
 
   const handleSaveProfile = async () => {
     setError('');
+    setIsSaving(true);
     try {
       const updatedUser = await accountService.updateProfile({
         firstName: formData.firstName,
@@ -85,7 +94,40 @@ export default function CustomerProfilePage() {
       setTimeout(() => setSuccess(''), 3000);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to update profile');
+    } finally {
+      setIsSaving(false);
     }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== 'DELETE') return;
+    
+    setIsDeleting(true);
+    setError('');
+    try {
+      await accountService.deleteMyAccount();
+      setShowDeleteModal(false);
+      // Logout and redirect to home
+      logout();
+      router.push('/');
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to delete account');
+      setIsDeleting(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    // Reset form to original user data
+    if (user) {
+      setFormData({
+        firstName: user.firstName || '',
+        lastName: user.lastName || '',
+        phone: user.phoneNumber || '',
+        email: user.email || '',
+      });
+    }
+    setError('');
   };
 
   if (!user) {
@@ -167,18 +209,13 @@ export default function CustomerProfilePage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Building className="w-5 h-5 text-white" />
-                  <span className="font-semibold text-white text-base">{user.profile?.totalSolds || 0}</span>
+                  <span className="font-semibold text-white text-base">{user.profile?.totalBought || 0}</span>
                   <span className="text-red-200 text-base">Bought</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Building className="w-5 h-5 text-white" />
-                  <span className="font-semibold text-white text-base">{user.profile?.totalRentals || 0}</span>
+                  <span className="font-semibold text-white text-base">{user.profile?.totalRented || 0}</span>
                   <span className="text-red-200 text-base">Rented</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Building className="w-5 h-5 text-white" />
-                  <span className="font-semibold text-white text-base">{user.profile?.totalProjects || 0}</span>
-                  <span className="text-red-200 text-base">Invested</span>
                 </div>
               </div>
             </div>
@@ -205,17 +242,53 @@ export default function CustomerProfilePage() {
         </div>
       </div>
 
+      {/* Success/Error Messages */}
+      {success && (
+        <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
+          {success}
+        </div>
+      )}
+      {error && (
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          {error}
+          <button onClick={() => setError('')} className="ml-2 underline">Dismiss</button>
+        </div>
+      )}
+
       {/* Basic Information */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-gray-900">Basic information</h2>
-          <button
-            onClick={() => setIsEditing(!isEditing)}
-            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
-          >
-            <Edit2 className="w-4 h-4" />
-            Modify
-          </button>
+          <div className="flex items-center gap-2">
+            {isEditing ? (
+              <>
+                <button
+                  onClick={handleCancelEdit}
+                  disabled={isSaving}
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+                >
+                  <X className="w-4 h-4" />
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveProfile}
+                  disabled={isSaving}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                >
+                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  Save Changes
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => setIsEditing(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
+              >
+                <Edit2 className="w-4 h-4" />
+                Modify
+              </button>
+            )}
+          </div>
         </div>
         
         <div className="bg-white rounded-lg border border-gray-200 p-6">
@@ -494,6 +567,87 @@ export default function CustomerProfilePage() {
           </div>
         </div>
       </div>
+
+      {/* Danger Zone - Delete Account */}
+      <div className="mb-8">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Danger Zone</h2>
+        
+        <div className="bg-white rounded-lg border border-red-200 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-medium text-gray-900">Delete Account</h3>
+              <p className="text-sm text-gray-500 mt-1">
+                Permanently delete your account and all associated data. This action cannot be undone.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete Account
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Delete Account Confirmation Modal */}
+      {showDeleteModal && (
+        <Modal
+          isOpen={showDeleteModal}
+          onClose={() => {
+            setShowDeleteModal(false);
+            setDeleteConfirmText('');
+          }}
+          title="Delete Account"
+        >
+          <div className="space-y-4">
+            <div className="flex items-start gap-3 p-4 bg-red-50 rounded-lg border border-red-200">
+              <AlertTriangle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium text-red-900">This action is irreversible</p>
+                <p className="text-sm text-red-700 mt-1">
+                  Deleting your account will permanently remove all your data, including your properties, transactions, and personal information.
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Type <span className="font-bold text-red-600">DELETE</span> to confirm
+              </label>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="Type DELETE here"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-sm text-gray-900"
+              />
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setDeleteConfirmText('');
+                }}
+                disabled={isDeleting}
+                className="flex-1 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleteConfirmText !== 'DELETE' || isDeleting}
+                className="flex-1 py-2.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isDeleting && <Loader2 className="w-4 h-4 animate-spin" />}
+                Delete My Account
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

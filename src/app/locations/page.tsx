@@ -5,7 +5,18 @@ import Link from 'next/link';
 import { MapPin, Building, Loader2, Search, Users, Home, TrendingUp, Filter, ChevronDown, Grid, List } from 'lucide-react';
 import NavBar from '@/app/components/layout/NavBar';
 import Footer from '@/app/components/layout/Footer';
+import Badge from '@/app/components/ui/Badge';
 import { locationService, LocationCardResponse, LocationCardsFilters } from '@/lib/api/services/location.service';
+
+// Helper function to get badge variant based on location type
+const getLocationBadgeVariant = (type: 'CITY' | 'DISTRICT' | 'WARD'): 'info' | 'success' | 'danger' => {
+  switch (type) {
+    case 'CITY': return 'info';
+    case 'DISTRICT': return 'success';
+    case 'WARD': return 'danger';
+    default: return 'info';
+  }
+};
 
 export default function LocationsPage() {
   // View mode
@@ -300,9 +311,9 @@ export default function LocationsPage() {
                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                   />
                   <div className="absolute top-3 left-3">
-                    <span className="px-3 py-1 text-xs font-bold rounded-full bg-blue-500 text-white">
+                    <Badge variant={getLocationBadgeVariant(location.locationTypeEnum as 'CITY' | 'DISTRICT' | 'WARD')}>
                       {location.locationTypeEnum}
-                    </span>
+                    </Badge>
                   </div>
                 </div>
 
@@ -354,9 +365,9 @@ export default function LocationsPage() {
                     <div>
                       <div className="flex items-center gap-3 mb-2">
                         <h3 className="font-semibold text-gray-900 text-xl">{location.name}</h3>
-                        <span className="px-2 py-1 text-xs font-bold rounded-full bg-blue-500 text-white">
+                        <Badge variant={getLocationBadgeVariant(location.locationTypeEnum as 'CITY' | 'DISTRICT' | 'WARD')}>
                           {location.locationTypeEnum}
-                        </span>
+                        </Badge>
                       </div>
                       <div className="flex items-center gap-6 mt-4 text-gray-600">
                         {location.population && (

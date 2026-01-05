@@ -12,7 +12,9 @@ import Footer from '@/app/components/layout/Footer';
 import PropertyCard from '@/app/components/cards/PropertyCard';
 import { accountService, UserProfile } from '@/lib/api/services/account.service';
 import { propertyService } from '@/lib/api/services/property.service';
+import { favoriteService, LikeType } from '@/lib/api/services/favorite.service';
 import { PropertyCard as PropertyCardType } from '@/lib/api/types';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function PublicProfilePage() {
   const params = useParams();
@@ -24,6 +26,23 @@ export default function PublicProfilePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingProperties, setIsLoadingProperties] = useState(false);
   const [error, setError] = useState('');
+  const { user } = useAuth();
+
+  const handleFavoriteToggle = async (propertyId: string | number) => {
+    if (!user) {
+      window.location.href = '/login';
+      return;
+    }
+    try {
+      await favoriteService.toggleLike(propertyId.toString(), LikeType.PROPERTY);
+      // Update local state
+      setProperties(prev => prev.map(p => 
+        p.id === propertyId ? { ...p, favorite: !p.favorite } : p
+      ));
+    } catch (err) {
+      console.error('Failed to toggle favorite:', err);
+    }
+  };
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -239,10 +258,13 @@ export default function PublicProfilePage() {
           {/* Report User Button */}
           <div className="mt-4 text-sm text-white italic flex items-center gap-2">
             <span>If something feels off, let us know.</span>
-            <button className="inline-flex items-center gap-1 px-3 py-1 bg-white/20 hover:bg-white/30 rounded transition-colors">
+            <Link
+              href={`/my/reports?type=User&targetId=${userId}`}
+              className="inline-flex items-center gap-1 px-3 py-1 bg-white/20 hover:bg-white/30 rounded transition-colors"
+            >
               <AlertOctagon className="w-4 h-4" />
               Report User
-            </button>
+            </Link>
           </div>
         </div>
       </div>
@@ -291,6 +313,7 @@ export default function PublicProfilePage() {
                 type={property.transactionType === 'SALE' ? 'Sale' : 'Rent'}
                 status={property.status === 'AVAILABLE' ? 'Available' : property.status === 'SOLD' ? 'Sold' : property.status === 'RENTED' ? 'Rented' : 'Pending'}
                 isFavorite={property.favorite}
+                onFavoriteToggle={handleFavoriteToggle}
                 showFavorite={true}
                 variant="profile"
               />

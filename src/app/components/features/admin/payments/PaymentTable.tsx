@@ -137,10 +137,10 @@ export default function PaymentTable({
 
                 {/* Date */}
                 <td className="px-6 py-4 text-gray-900 text-xs">
-                  {item.paidDate ? (
+                  {item.paidTime ? (
                     <div>
                       <span className="text-green-600 font-bold">Paid: </span>
-                      {new Date(item.paidDate).toLocaleDateString()}
+                      {new Date(item.paidTime).toLocaleDateString()}
                     </div>
                   ) : item.dueDate ? (
                     <div>

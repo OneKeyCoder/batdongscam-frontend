@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Building, Search, MapPin, Grid, List, SlidersHorizontal, ChevronDown, Loader2, AlertCircle, Filter } from 'lucide-react';
@@ -31,16 +31,13 @@ const areaRanges = [
   { label: 'Above 200m²', value: 'xlarge', min: 200, max: undefined },
 ];
 
-export default function PropertiesPage() {
+interface PropertiesContentProps {
+  initialType: 'all' | 'SALE' | 'RENTAL';
+}
+
+function PropertiesContent({ initialType }: PropertiesContentProps) {
   const { user } = useAuth();
   const searchParams = useSearchParams();
-  
-  // Read type from URL parameters
-  const typeParam = searchParams.get('type');
-  const initialType: 'all' | 'SALE' | 'RENTAL' = 
-    typeParam === 'rent' ? 'RENTAL' : 
-    typeParam === 'sale' ? 'SALE' : 
-    'all';
   
   // Basic filters
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -294,20 +291,20 @@ export default function PropertiesPage() {
               All
             </button>
             <button
-              onClick={() => setPropertyType('SALE')}
-              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                propertyType === 'SALE' ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              For Sale
-            </button>
-            <button
               onClick={() => setPropertyType('RENTAL')}
               className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                 propertyType === 'RENTAL' ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
               For Rent
+            </button>
+            <button
+              onClick={() => setPropertyType('SALE')}
+              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                propertyType === 'SALE' ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              For Sale
             </button>
           </div>
 
@@ -411,25 +408,30 @@ export default function PropertiesPage() {
           </div>
         ) : viewMode === 'grid' ? (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredProperties.map((property) => (
-              <PropertyCard
-                key={property.id}
-                id={property.id}
-                image={getImageUrl(property.thumbnailUrl)}
-                title={property.title}
-                price={`${property.price.toLocaleString('vi-VN')} VND`}
-                priceUnit={property.transactionType === 'RENTAL' ? '/tháng' : ''}
-                address={property.location}
-                area={`${property.totalArea}m²`}
-                numberOfImages={property.numberOfImages}
-                type={property.transactionType === 'SALE' ? 'Sale' : 'Rent'}
-                status={property.status === 'AVAILABLE' ? 'Available' : property.status === 'SOLD' ? 'Sold' : property.status === 'RENTED' ? 'Rented' : 'Pending'}
-                isFavorite={property.favorite}
-                onFavoriteToggle={(id) => handleToggleFavorite(new MouseEvent('click') as any, id as string)}
-                showFavorite={true}
-                variant="profile"
-              />
-            ))}
+            {filteredProperties.map((property) => {
+              const isSale = property.transactionType === 'SALE';
+              const isRent = property.transactionType === 'RENTAL';
+              
+              return (
+                <PropertyCard
+                  key={property.id}
+                  id={property.id}
+                  image={getImageUrl(property.thumbnailUrl)}
+                  title={property.title}
+                  price={`${property.price.toLocaleString('vi-VN')} VND`}
+                  priceUnit={isRent ? '/tháng' : ''}
+                  address={property.location}
+                  area={`${property.totalArea}m²`}
+                  numberOfImages={property.numberOfImages}
+                  type={isSale ? 'Sale' : 'Rent'}
+                  status={property.status === 'AVAILABLE' ? 'Available' : property.status === 'SOLD' ? 'Sold' : property.status === 'RENTED' ? 'Rented' : 'Pending'}
+                  isFavorite={property.favorite}
+                  onFavoriteToggle={(id) => handleToggleFavorite(new MouseEvent('click') as any, id as string)}
+                  showFavorite={true}
+                  variant="profile"
+                />
+              );
+            })}
           </div>
         ) : (
           <div className="space-y-4">
@@ -520,12 +522,10 @@ export default function PropertiesPage() {
                 const pages: (number | string)[] = [];
                 
                 if (totalPages <= 9) {
-                  // Show all pages if total is 9 or less
                   for (let i = 1; i <= totalPages; i++) {
                     pages.push(i);
                   }
                 } else {
-                  // Always show first 2 pages
                   pages.push(1);
                   pages.push(2);
                   
@@ -533,7 +533,6 @@ export default function PropertiesPage() {
                     pages.push('...');
                   }
                   
-                  // Show pages around current page (3 pages range)
                   const start = Math.max(3, currentPage - 1);
                   const end = Math.min(totalPages - 2, currentPage + 1);
                   
@@ -547,7 +546,6 @@ export default function PropertiesPage() {
                     pages.push('...');
                   }
                   
-                  // Always show last 2 pages
                   pages.push(totalPages - 1);
                   pages.push(totalPages);
                 }
@@ -595,5 +593,29 @@ export default function PropertiesPage() {
         initialFilters={advancedFilters}
       />
     </div>
+  );
+}
+
+function PropertiesPageWithParams() {
+  const searchParams = useSearchParams();
+  
+  const typeParam = searchParams.get('type');
+  const initialType: 'all' | 'SALE' | 'RENTAL' = 
+    typeParam === 'rent' ? 'RENTAL' : 
+    typeParam === 'sale' ? 'SALE' : 
+    'all';
+
+  return <PropertiesContent initialType={initialType} />;
+}
+
+export default function PropertiesPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-red-600 animate-spin" />
+      </div>
+    }>
+      <PropertiesPageWithParams />
+    </Suspense>
   );
 }
