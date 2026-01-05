@@ -13,7 +13,6 @@ type ViolationType = 'FRAUDULENT_LISTING' | 'MISREPRESENTATION_OF_PROPERTY' | 'S
   'HARASSMENT' | 'SCAM_ATTEMPT';
 type ReportedType = 'CUSTOMER' | 'PROPERTY' | 'SALES_AGENT' | 'PROPERTY_OWNER';
 
-// UI type for report creation form
 type UIReportType = 'Property' | 'User' | 'Agent';
 
 const reportTypes: { value: UIReportType; label: string; icon: React.ElementType; backendType: ReportedType }[] = [
@@ -53,8 +52,12 @@ const formatDate = (dateString: string): string => {
   });
 };
 
-export default function ReportsPage() {
-  // Data state
+interface ReportsContentProps {
+  initialType?: UIReportType;
+  initialTargetId?: string;
+}
+
+function ReportsContent({ initialType, initialTargetId }: ReportsContentProps) {
   const [reports, setReports] = useState<ViolationUserItem[]>([]);
   const [selectedReportDetails, setSelectedReportDetails] = useState<ViolationUserDetails | null>(null);
   const [loading, setLoading] = useState(true);
@@ -62,57 +65,35 @@ export default function ReportsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const pageSize = 10;
 
-  // Modal state
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'pending' | 'resolved'>('all');
 
-  // Form state
   const [newReport, setNewReport] = useState<{
     type: UIReportType;
     targetId: string;
     violationType: ViolationType | '';
     description: string;
   }>({
-    type: 'Property',
-    targetId: '',
+    type: initialType || 'Property',
+    targetId: initialTargetId || '',
     violationType: '',
     description: '',
   });
   const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const searchParams = useSearchParams();
 
-  // Check for query params to auto-open modal with prefilled data
   useEffect(() => {
-    const typeParam = searchParams.get('type');
-    const targetIdParam = searchParams.get('targetId');
-    
-    if (typeParam && targetIdParam) {
-      // Map query param type to UIReportType
-      let uiType: UIReportType = 'Property';
-      if (typeParam === 'User' || typeParam === 'CUSTOMER' || typeParam === 'PROPERTY_OWNER') {
-        uiType = 'User';
-      } else if (typeParam === 'Agent' || typeParam === 'SALES_AGENT') {
-        uiType = 'Agent';
-      }
-      
-      setNewReport(prev => ({
-        ...prev,
-        type: uiType,
-        targetId: targetIdParam,
-      }));
+    if (initialType && initialTargetId) {
       setShowCreateModal(true);
     }
-  }, [searchParams]);
+  }, [initialType, initialTargetId]);
 
-  // Fetch reports on mount and when page changes
   useEffect(() => {
     fetchReports();
   }, [currentPage]);
@@ -172,12 +153,10 @@ export default function ReportsPage() {
 
       await violationService.createViolationReport(request, evidenceFiles.length > 0 ? evidenceFiles : undefined);
 
-      // Reset form and close modal
       setNewReport({ type: 'Property', targetId: '', violationType: '', description: '' });
       setEvidenceFiles([]);
       setShowCreateModal(false);
 
-      // Refresh reports list
       setCurrentPage(1);
       fetchReports();
     } catch (err) {
@@ -204,7 +183,6 @@ export default function ReportsPage() {
     setSelectedReportDetails(null);
   };
 
-  // Filter reports based on status
   const filteredReports = reports.filter(r => {
     if (filter === 'pending') return r.status === 'PENDING' || r.status === 'REPORTED' || r.status === 'UNDER_REVIEW';
     if (filter === 'resolved') return r.status === 'RESOLVED' || r.status === 'DISMISSED';
@@ -213,7 +191,6 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
@@ -234,7 +211,6 @@ export default function ReportsPage() {
         </button>
       </div>
 
-      {/* Error Message */}
       {error && (
         <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
           {error}
@@ -242,7 +218,6 @@ export default function ReportsPage() {
         </div>
       )}
 
-      {/* Filter */}
       <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1 w-fit">
         <button
           onClick={() => setFilter('all')}
@@ -270,7 +245,6 @@ export default function ReportsPage() {
         </button>
       </div>
 
-      {/* Reports List */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-16">
@@ -332,7 +306,6 @@ export default function ReportsPage() {
               </table>
             </div>
 
-            {/* Empty State */}
             {filteredReports.length === 0 && !loading && (
               <div className="flex flex-col items-center justify-center py-16">
                 <AlertTriangle className="w-16 h-16 text-gray-300 mb-4" />
@@ -341,7 +314,6 @@ export default function ReportsPage() {
               </div>
             )}
 
-            {/* Pagination */}
             {totalPages > 1 && (
               <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100">
                 <p className="text-sm text-gray-600">
@@ -372,7 +344,6 @@ export default function ReportsPage() {
         )}
       </div>
 
-      {/* Create Report Modal */}
       {showCreateModal && (
         <Modal
           isOpen={showCreateModal}
@@ -380,7 +351,6 @@ export default function ReportsPage() {
           title="Create Violation Report"
         >
           <form onSubmit={(e) => { e.preventDefault(); handleCreateReport(); }} className="space-y-4">
-            {/* Report Type */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">What are you reporting?</label>
               <div className="grid grid-cols-3 gap-2">
@@ -402,7 +372,6 @@ export default function ReportsPage() {
               </div>
             </div>
 
-            {/* Target ID */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 {newReport.type} ID
@@ -417,7 +386,6 @@ export default function ReportsPage() {
               />
             </div>
 
-            {/* Violation Type */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Violation Type</label>
               <select
@@ -433,7 +401,6 @@ export default function ReportsPage() {
               </select>
             </div>
 
-            {/* Description */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Description (10-1000 characters)</label>
               <textarea
@@ -449,7 +416,6 @@ export default function ReportsPage() {
               <p className="text-xs text-gray-500 mt-1">{newReport.description.length}/1000 characters</p>
             </div>
 
-            {/* Evidence Upload */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Evidence (Optional)</label>
               <div
@@ -468,7 +434,6 @@ export default function ReportsPage() {
                 onChange={handleFileChange}
                 className="hidden"
               />
-              {/* File List */}
               {evidenceFiles.length > 0 && (
                 <div className="mt-3 space-y-2">
                   {evidenceFiles.map((file, index) => (
@@ -487,7 +452,6 @@ export default function ReportsPage() {
               )}
             </div>
 
-            {/* Actions */}
             <div className="flex gap-3 pt-4 border-t">
               <button
                 type="button"
@@ -510,7 +474,6 @@ export default function ReportsPage() {
         </Modal>
       )}
 
-      {/* Report Details Modal */}
       {selectedReportId && (
         <Modal
           isOpen={!!selectedReportId}
@@ -523,7 +486,6 @@ export default function ReportsPage() {
             </div>
           ) : selectedReportDetails ? (
             <div className="space-y-4">
-              {/* Status Banner */}
               {(() => {
                 const status = statusConfig[selectedReportDetails.status as ReportStatus] || statusConfig.PENDING;
                 const StatusIcon = status.icon;
@@ -551,7 +513,6 @@ export default function ReportsPage() {
                 );
               })()}
 
-              {/* Report Info */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-3 bg-gray-50 rounded-lg">
                   <p className="text-xs text-gray-500">Violation Type</p>
@@ -563,13 +524,11 @@ export default function ReportsPage() {
                 </div>
               </div>
 
-              {/* Description */}
               <div>
                 <p className="text-xs text-gray-500 mb-1">Description</p>
                 <p className="text-sm text-gray-600 p-3 bg-gray-50 rounded-lg">{selectedReportDetails.description}</p>
               </div>
 
-              {/* Evidence URLs */}
               {selectedReportDetails.evidenceUrls && selectedReportDetails.evidenceUrls.length > 0 && (
                 <div>
                   <p className="text-xs text-gray-500 mb-2">Evidence Files</p>
@@ -589,7 +548,6 @@ export default function ReportsPage() {
                 </div>
               )}
 
-              {/* Penalty Applied */}
               {selectedReportDetails.penaltyApplied && (
                 <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
                   <p className="text-xs text-red-600 font-medium mb-1">Penalty Applied</p>
@@ -597,7 +555,6 @@ export default function ReportsPage() {
                 </div>
               )}
 
-              {/* Resolution Notes */}
               {selectedReportDetails.resolutionNotes && (
                 <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
                   <p className="text-xs text-green-600 font-medium mb-1 flex items-center gap-1">
@@ -616,5 +573,42 @@ export default function ReportsPage() {
         </Modal>
       )}
     </div>
+  );
+}
+
+function ReportsPageWithParams() {
+  const searchParams = useSearchParams();
+  
+  const typeParam = searchParams.get('type');
+  const targetIdParam = searchParams.get('targetId');
+  
+  let initialType: UIReportType | undefined = undefined;
+  if (typeParam && targetIdParam) {
+    if (typeParam === 'User' || typeParam === 'CUSTOMER' || typeParam === 'PROPERTY_OWNER') {
+      initialType = 'User';
+    } else if (typeParam === 'Agent' || typeParam === 'SALES_AGENT') {
+      initialType = 'Agent';
+    } else {
+      initialType = 'Property';
+    }
+  }
+
+  return (
+    <ReportsContent 
+      initialType={initialType} 
+      initialTargetId={targetIdParam || undefined} 
+    />
+  );
+}
+
+export default function ReportsPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="w-8 h-8 text-red-600 animate-spin" />
+      </div>
+    }>
+      <ReportsPageWithParams />
+    </Suspense>
   );
 }

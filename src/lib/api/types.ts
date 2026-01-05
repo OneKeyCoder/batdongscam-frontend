@@ -237,4 +237,5 @@ export interface PropertyFilters {
   topK?: boolean;
   ownerId?: string;
   agentId?: string;
+  hasAgent?: boolean;
 }

@@ -90,7 +90,7 @@ export default function AgentPayoutsPage() {
                       {formatAmount(payout.amount)}
                     </td>
                     <td className="px-6 py-4 text-gray-600">
-                      {formatDate(payout.paidDate || payout.dueDate)}
+                      {formatDate(payout.paidTime || payout.dueDate)}
                     </td>
                     <td className="px-6 py-4">
                       <Badge variant={payout.status === 'SUCCESS' ? 'success' : 'warning'}>

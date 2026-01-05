@@ -258,9 +258,9 @@ export default function CustomerPaymentsPage() {
                             <Calendar className="w-4 h-4 text-gray-400" />
                             {formatDate(payment.dueDate)}
                           </div>
-                          {payment.paidDate && (
+                          {payment.paidTime && (
                             <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
-                              <Check className="w-3 h-3" /> Paid: {formatDate(payment.paidDate)}
+                              <Check className="w-3 h-3" /> Paid: {formatDate(payment.paidTime)}
                             </p>
                           )}
                         </td>
@@ -362,8 +362,8 @@ export default function CustomerPaymentsPage() {
                 }`}>
                   {statusLabels[selectedPayment.status as PaymentStatus] || selectedPayment.status}
                 </p>
-                {selectedPayment.paidDate && (
-                  <p className="text-sm text-green-700">Paid on {formatDate(selectedPayment.paidDate)}</p>
+                {selectedPayment.paidTime && (
+                  <p className="text-sm text-green-700">Paid on {formatDate(selectedPayment.paidTime)}</p>
                 )}
               </div>
             </div>

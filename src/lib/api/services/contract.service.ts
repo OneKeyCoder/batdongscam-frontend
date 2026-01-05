@@ -5,6 +5,7 @@ const CONTRACT_ENDPOINTS = {
   CONTRACTS: '/contracts',
   MY_CONTRACTS: '/contracts/my',
   AGENT_CONTRACTS: '/contracts/agent/my',
+  OWNER_CONTRACTS: '/contracts/owner/my',
   CONTRACT_DETAIL: (id: string) => `/contracts/${id}`,
   CREATE: '/contracts',
   SIGN: (id: string) => `/contracts/${id}/sign`,
@@ -255,5 +256,17 @@ export const contractService = {
       }
     );
     return response.data.data;
+  },
+
+  /**
+   * Get my owner contracts (Property Owner only)
+   * Returns contracts for properties owned by the current user
+   */
+  async getMyOwnerContracts(filters?: MyContractsFilters): Promise<PaginatedResponse<ContractListItem>> {
+    const response = await apiClient.get<PaginatedResponse<ContractListItem>>(
+      CONTRACT_ENDPOINTS.OWNER_CONTRACTS,
+      { params: filters }
+    );
+    return response.data;
   },
 };

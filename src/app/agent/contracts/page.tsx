@@ -52,21 +52,21 @@ export default function AgentContractsPage() {
   const loadContracts = async () => {
     setIsLoading(true);
     try {
-      const data = await contractService.getAgentContracts();
-      const mappedData: Contract[] = data.map((item: any) => ({
+      const response = await contractService.getMyAgentContracts();
+      const mappedData: Contract[] = (response.data || []).map((item: any) => ({
         id: item.id,
-        contractNumber: item.id,
+        contractNumber: item.contractNumber || item.id,
         propertyName: item.propertyTitle || 'Untitled',
         propertyImage: '',
         propertyAddress: item.propertyAddress || '',
-        contractType: item.contractType === 'SALE' ? 'Sale' : 'Rental',
+        contractType: item.contractType === 'PURCHASE' ? 'Sale' : 'Rental',
         status: mapStatus(item.status),
-        customerName: item.customerName || 'Unknown',
+        customerName: `${item.customerFirstName || ''} ${item.customerLastName || ''}`.trim() || 'Unknown',
         customerPhone: '',
-        ownerName: item.ownerName || 'Unknown',
+        ownerName: '',
         startDate: item.startDate || '',
         endDate: item.endDate || '',
-        totalValue: item.price ? `$${item.price.toLocaleString()}` : 'N/A',
+        totalValue: item.totalContractAmount ? `${item.totalContractAmount.toLocaleString()} VND` : 'N/A',
         commission: 'N/A',
         createdAt: item.createdAt || ''
       }));

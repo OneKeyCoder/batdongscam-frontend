@@ -49,6 +49,9 @@ export interface UserProfile {
     totalListings: number;
     totalBought: number;
     totalRented: number;
+    totalAssignedProperties?: number; // For agents
+    totalSuccessfulDeals?: number; // For agents
+    employeeCode?: string; // For agents
   };
   statisticMonth?: any;
   statisticAll?: any;
@@ -56,6 +59,8 @@ export interface UserProfile {
     totalListings: number;
     totalBought: number;
     totalRented: number;
+    totalSolds?: number; // For property owners
+    totalRentals?: number; // For property owners
   };
 }
 

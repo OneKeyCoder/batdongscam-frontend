@@ -102,10 +102,10 @@ export default function NotificationsPage() {
     fetchNotifications();
   }, [currentPage]);
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadCount = notifications.filter(n => !n.isRead).length;
 
   const filteredNotifications = notifications.filter(n => {
-    if (filter === 'unread') return !n.read;
+    if (filter === 'unread') return !n.isRead;
     if (filter === 'PAYMENT') return n.type === 'PAYMENT';
     if (filter === 'VIEWING') return n.type === 'VIEWING' || n.type.startsWith('APPOINTMENT');
     if (filter === 'CONTRACT') return n.type === 'CONTRACT';
@@ -165,11 +165,10 @@ export default function NotificationsPage() {
         }
       }
       
-      // Mark as read if not already
-      if (!notification.read) {
+      if (!notification.isRead) {
         await notificationService.markAsRead(notification.id);
         setNotifications(notifications.map(n => 
-          n.id === notification.id ? { ...n, read: true } : n
+          n.id === notification.id ? { ...n, isRead: true } : n
         ));
       }
     } catch (err) {
@@ -182,11 +181,11 @@ export default function NotificationsPage() {
   const markAllAsRead = async () => {
     try {
       await notificationService.markAllAsRead();
-      setNotifications(notifications.map(n => ({ ...n, read: true })));
+      setNotifications(notifications.map(n => ({ ...n, isRead: true })));
     } catch (err) {
       console.error('Failed to mark all as read:', err);
       // Still update UI optimistically
-      setNotifications(notifications.map(n => ({ ...n, read: true })));
+      setNotifications(notifications.map(n => ({ ...n, isRead: true })));
     }
   };
 
@@ -289,7 +288,7 @@ export default function NotificationsPage() {
               <div
                 key={notification.id}
                 className={`flex items-start gap-4 p-4 hover:bg-gray-50 transition-colors cursor-pointer ${
-                  !notification.read ? 'bg-red-50/50' : ''
+                  !notification.isRead ? 'bg-red-50/50' : ''
                 }`}
                 onClick={() => handleRead(notification)}
               >
@@ -302,14 +301,14 @@ export default function NotificationsPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <h3 className={`text-sm ${!notification.read ? 'font-bold text-gray-900' : 'font-medium text-gray-700'}`}>
+                      <h3 className={`text-sm ${!notification.isRead ? 'font-bold text-gray-900' : 'font-medium text-gray-700'}`}>
                         {notification.title}
                       </h3>
                       <p className="text-xs text-gray-500 mt-1">
                         {notification.type.replace(/_/g, ' ')}
                       </p>
                     </div>
-                    {!notification.read && (
+                    {!notification.isRead && (
                       <div className="w-2 h-2 bg-red-600 rounded-full shrink-0 mt-2" />
                     )}
                   </div>

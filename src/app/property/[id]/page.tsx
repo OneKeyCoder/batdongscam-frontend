@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { Building, MapPin, Bed, Bath, Square, Heart, Share2, Phone, Mail, Calendar, ChevronLeft, ChevronRight, Star, User, Check, Clock, Shield, Menu, X, Loader2, AlertCircle, Edit, FileText, Trash2, Eye, Download, AlertTriangle } from 'lucide-react';
 import NavBar from '@/app/components/layout/NavBar';
 import Modal from '@/app/components/ui/Modal';
+import Badge from '@/app/components/ui/Badge';
 import Footer from '@/app/components/layout/Footer';
 import { propertyService, PropertyDetails } from '@/lib/api/services/property.service';
 import { appointmentService } from '@/lib/api/services/appointment.service';
@@ -84,14 +85,11 @@ export default function PropertyDetailPage() {
     setBookingError('');
     
     try {
-      // Combine date and time - DON'T use toISOString() as it converts to UTC
-      // Send in ISO 8601 format without timezone to preserve local time
-      const requestedDate = `${bookingForm.date}T${bookingForm.time}:00`;
-      
       await appointmentService.createAppointment({
         propertyId,
-        requestedDate,
-        customerRequirements: bookingForm.customerRequirements || undefined,
+        preferredDate: bookingForm.date,
+        preferredTime: bookingForm.time,
+        message: bookingForm.customerRequirements || undefined,
       });
       
       setBookingSuccess(true);
@@ -250,11 +248,9 @@ export default function PropertyDetailPage() {
 
           {/* Type Badge */}
           <div className="absolute top-4 left-4">
-            <span className={`px-4 py-2 text-sm font-bold rounded-full ${
-              property.transactionType === 'SALE' ? 'bg-red-600 text-white' : 'bg-blue-600 text-white'
-            }`}>
+            <Badge variant={property.transactionType === 'SALE' ? 'danger' : 'info'} className="!px-4 !py-2 !text-sm">
               FOR {property.transactionType === 'SALE' ? 'SALE' : 'RENT'}
-            </span>
+            </Badge>
           </div>
         </div>
 

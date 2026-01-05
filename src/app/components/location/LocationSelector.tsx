@@ -36,7 +36,7 @@ export default function LocationSelector({
     const fetchCities = async () => {
       setIsLoadingCities(true);
       try {
-        const citiesData = await locationService.getCities();
+        const citiesData = await locationService.getChildLocations('CITY');
         setCities(citiesData);
       } catch (error) {
         console.error('Failed to load cities:', error);
@@ -53,7 +53,7 @@ export default function LocationSelector({
       const fetchDistricts = async () => {
         setIsLoadingDistricts(true);
         try {
-          const districtsData = await locationService.getDistricts(selectedCityId);
+          const districtsData = await locationService.getChildLocations('DISTRICT', selectedCityId);
           setDistricts(districtsData);
         } catch (error) {
           console.error('Failed to load districts:', error);
@@ -74,7 +74,7 @@ export default function LocationSelector({
       const fetchWards = async () => {
         setIsLoadingWards(true);
         try {
-          const wardsData = await locationService.getWards(selectedDistrictId);
+          const wardsData = await locationService.getChildLocations('WARD', selectedDistrictId);
           setWards(wardsData);
         } catch (error) {
           console.error('Failed to load wards:', error);

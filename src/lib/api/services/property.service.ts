@@ -227,6 +227,9 @@ export const propertyService = {
     if (filters.topK !== undefined) params.append('topK', filters.topK.toString());
     if (filters.ownerId) params.append('ownerId', filters.ownerId);
     if (filters.agentId) params.append('agentId', filters.agentId);
+    
+    // Always send hasAgent parameter to prevent backend null error
+    params.append('hasAgent', (filters.hasAgent ?? false).toString());
 
     const response = await apiClient.get<PaginatedResponse<PropertyCard>>(
       `${PROPERTY_ENDPOINTS.CARDS}?${params.toString()}`

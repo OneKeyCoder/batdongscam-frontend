@@ -190,7 +190,7 @@ export default function OwnerPaymentsPage() {
           >
             {properties.map((prop) => (
               <option key={prop.id} value={prop.id}>
-                {prop.title} - {prop.fullAddress}
+                {prop.title} - {prop.location}
               </option>
             ))}
           </select>
@@ -322,8 +322,8 @@ export default function OwnerPaymentsPage() {
                             <Calendar className="w-4 h-4 text-gray-400" />
                             {formatDate(payment.dueDate)}
                           </p>
-                          {payment.paidDate && (
-                            <p className="text-xs text-green-600 mt-1">Paid: {formatDate(payment.paidDate)}</p>
+                          {payment.paidTime && (
+                            <p className="text-xs text-green-600 mt-1">Paid: {formatDate(payment.paidTime)}</p>
                           )}
                         </td>
                         <td className="px-6 py-4">
@@ -417,8 +417,8 @@ export default function OwnerPaymentsPage() {
                    selectedPayment.status === 'OVERDUE' ? 'Payment Overdue' :
                    'Payment Pending'}
                 </p>
-                {selectedPayment.paidDate && (
-                  <p className="text-sm text-green-700">Received on {formatDate(selectedPayment.paidDate)}</p>
+                {selectedPayment.paidTime && (
+                  <p className="text-sm text-green-700">Received on {formatDate(selectedPayment.paidTime)}</p>
                 )}
               </div>
             </div>

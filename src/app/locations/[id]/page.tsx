@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { MapPin, Building, Users, TrendingUp, Home, Heart, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import NavBar from '@/app/components/layout/NavBar';
 import Footer from '@/app/components/layout/Footer';
+import Badge from '@/app/components/ui/Badge';
 import { locationService, LocationDetailsResponse, LocationCardResponse } from '@/lib/api/services/location.service';
 import { propertyService } from '@/lib/api/services/property.service';
 import { PropertyCard as PropertyCardType } from '@/lib/api/types';
@@ -383,12 +384,20 @@ export default function LocationDetailsPage() {
                         href={`/property/${property.id}`}
                         className="block group"
                       >
-                        <div className="flex gap-3">
-                          <img
-                            src={getImageUrl(property.thumbnailUrl)}
-                            alt={property.title}
-                            className="w-24 h-24 rounded-lg object-cover group-hover:scale-105 transition-transform"
-                          />
+                        <div className="flex gap-4">
+                          <div className="relative w-40 h-40 rounded-xl overflow-hidden flex-shrink-0 shadow-sm">
+                            <img
+                              src={getImageUrl(property.thumbnailUrl)}
+                              alt={property.title}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                            />
+                            {/* Transaction Type Badge */}
+                            <div className="absolute top-1 left-1">
+                              <Badge variant={property.transactionType === 'SALE' ? 'danger' : 'info'} className="!text-[8px] !px-1.5 !py-0.5">
+                                {property.transactionType === 'SALE' ? 'SALE' : 'RENT'}
+                              </Badge>
+                            </div>
+                          </div>
                           <div className="flex-1 min-w-0">
                             <h4 className="font-semibold text-gray-900 text-sm line-clamp-1 group-hover:text-red-600">
                               {property.title}
@@ -399,10 +408,19 @@ export default function LocationDetailsPage() {
                             <p className="text-xs text-gray-500 mt-1">
                               {formatNumber(property.totalArea)} m²
                             </p>
-                            <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
-                              <Users className="w-3 h-3" />
-                              {property.numberOfImages} photos
-                            </p>
+                            {/* Status Badge */}
+                            <div className="mt-1">
+                              <Badge 
+                                variant={
+                                  property.status === 'AVAILABLE' ? 'success' : 
+                                  property.status === 'PENDING' ? 'warning' :
+                                  property.status === 'SOLD' || property.status === 'RENTED' ? 'info' : 'default'
+                                }
+                                className="!text-[8px] !px-1.5 !py-0.5"
+                              >
+                                {property.status}
+                              </Badge>
+                            </div>
                           </div>
                         </div>
                       </Link>

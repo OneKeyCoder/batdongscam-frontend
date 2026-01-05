@@ -10,7 +10,14 @@ export type NotificationType =
   | 'CONTRACT_UPDATE'
   | 'PAYMENT_DUE'
   | 'VIOLATION_WARNING'
-  | 'SYSTEM_ALERT';
+  | 'SYSTEM_ALERT'
+  | 'PAYMENT'
+  | 'VIEWING'
+  | 'CONTRACT'
+  | 'PROPERTY_APPROVAL'
+  | 'PROPERTY_REJECTION'
+  | 'SYSTEM'
+  | 'REPORT';
 
 export type RelatedEntityType =
   | 'PROPERTY'
@@ -140,6 +147,13 @@ export const getNotificationTypeLabel = (type: NotificationType): string => {
     PAYMENT_DUE: 'Đến hạn thanh toán',
     VIOLATION_WARNING: 'Cảnh báo vi phạm',
     SYSTEM_ALERT: 'Thông báo hệ thống',
+    PAYMENT: 'Thanh toán',
+    VIEWING: 'Xem bất động sản',
+    CONTRACT: 'Hợp đồng',
+    PROPERTY_APPROVAL: 'Duyệt bất động sản',
+    PROPERTY_REJECTION: 'Từ chối bất động sản',
+    SYSTEM: 'Hệ thống',
+    REPORT: 'Báo cáo',
   };
   return labels[type] || type;
 };
@@ -147,14 +161,21 @@ export const getNotificationTypeLabel = (type: NotificationType): string => {
 export const getNotificationTypeVariant = (type: NotificationType): string => {
   const variants: Record<NotificationType, string> = {
     APPOINTMENT_BOOKED: 'success',
-    APPOINTMENT_CANCELLED: 'error', // Đổi failed thành error cho chuẩn Antd/MUI
-    APPOINTMENT_COMPLETED: 'processing', // Đổi blue thành processing
+    APPOINTMENT_CANCELLED: 'error',
+    APPOINTMENT_COMPLETED: 'processing',
     APPOINTMENT_ASSIGNED: 'warning',
     APPOINTMENT_REMINDER: 'warning',
     CONTRACT_UPDATE: 'processing',
     PAYMENT_DUE: 'error',
     VIOLATION_WARNING: 'error',
     SYSTEM_ALERT: 'default',
+    PAYMENT: 'success',
+    VIEWING: 'processing',
+    CONTRACT: 'processing',
+    PROPERTY_APPROVAL: 'success',
+    PROPERTY_REJECTION: 'error',
+    SYSTEM: 'default',
+    REPORT: 'warning',
   };
   return variants[type] || 'default';
 };

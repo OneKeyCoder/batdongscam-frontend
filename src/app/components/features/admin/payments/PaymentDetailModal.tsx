@@ -96,7 +96,7 @@ export default function PaymentDetailModal({ isOpen, onClose, paymentId }: Payme
               {/* --- GRID INFO --- */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6 mb-8">
                 <InfoItem icon={<Calendar className="w-5 h-5" />} label="Installment number" value={data.installmentNumber?.toString()} />
-                <InfoItem icon={<Calendar className="w-5 h-5" />} label="Paid date" value={formatDateTime(data.paidDate)} />
+                <InfoItem icon={<Calendar className="w-5 h-5" />} label="Paid date" value={formatDateTime(data.paidTime)} />
                 <InfoItem icon={<Calendar className="w-5 h-5" />} label="Overdue days" value={data.overdueDays ? `${data.overdueDays} days` : '0'} />
                 <InfoItem icon={<Mail className="w-5 h-5" />} label="Payment type" value={data.paymentType} />
                 <InfoItem icon={<Banknote className="w-5 h-5" />} label="Payment method" value={data.paymentMethod} />

@@ -41,6 +41,7 @@ const roleMenuItems: Record<UserRole, MenuItem[]> = {
   CUSTOMER: [
     { href: '/my/profile', label: 'My Profile', icon: User },
     { href: '/my/viewings', label: 'Viewings', icon: Calendar },
+    { href: '/my/contracts', label: 'Contracts', icon: FileText },
     { href: '/my/payments', label: 'Payments', icon: Wallet },
     { href: '/my/reports', label: 'Violation Reports', icon: AlertTriangle },
   ],

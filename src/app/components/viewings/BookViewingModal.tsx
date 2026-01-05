@@ -27,13 +27,11 @@ export default function BookViewingModal({ isOpen, onClose, propertyId, property
     setIsSubmitting(true);
 
     try {
-      // Combine date and time into ISO 8601 format without timezone conversion
-      const requestedDate = `${formData.preferredDate}T${formData.preferredTime}:00`;
-      
       await appointmentService.createAppointment({
         propertyId,
-        requestedDate,
-        customerRequirements: formData.message || undefined,
+        preferredDate: formData.preferredDate,
+        preferredTime: formData.preferredTime,
+        message: formData.message || undefined,
       });
 
       alert('Viewing booked successfully! Check your viewings page for details.');

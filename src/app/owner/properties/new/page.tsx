@@ -16,6 +16,7 @@ interface PropertyForm {
   propertyTypeId: string;
   price: string;
   priceUnit: string;
+  rentPeriod?: string;
   address: string;
   cityId: string;
   districtId: string;
@@ -77,7 +78,7 @@ export default function CreatePropertyPage() {
       try {
         const [typesData, citiesData] = await Promise.all([
           locationService.getPropertyTypes(),
-          locationService.getCities()
+          locationService.getChildLocations('CITY')
         ]);
         setPropertyTypes(typesData);
         setCities(citiesData);
@@ -92,7 +93,7 @@ export default function CreatePropertyPage() {
   useEffect(() => {
     if (formData.cityId) {
       setIsLoadingLocations(true);
-      locationService.getDistricts(formData.cityId)
+      locationService.getChildLocations('DISTRICT', formData.cityId)
         .then(districtsData => {
           setDistricts(districtsData);
           setWards(new Map()); // Reset wards
@@ -110,7 +111,7 @@ export default function CreatePropertyPage() {
   useEffect(() => {
     if (formData.districtId) {
       setIsLoadingLocations(true);
-      locationService.getWards(formData.districtId)
+      locationService.getChildLocations('WARD', formData.districtId)
         .then(wardsData => {
           setWards(wardsData);
           setFormData(prev => ({ ...prev, wardId: '' }));
@@ -204,7 +205,7 @@ export default function CreatePropertyPage() {
       const propertyData: CreatePropertyRequest = {
         title: formData.title,
         description: formData.description,
-        transactionType: formData.type.toUpperCase() as 'SALE' | 'RENT',
+        transactionType: formData.type === 'Sale' ? 'SALE' : 'RENTAL',
         fullAddress: `${formData.address}, ${wardName}, ${districtName}, ${cityName}`,
         area: parseFloat(formData.area),
         priceAmount: parseFloat(formData.price.replace(/,/g, '')),
