@@ -113,7 +113,7 @@ export default function PaymentDetailModal({ isOpen, onClose, payment, contract 
                         </div>
                         <div className="w-full bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm text-gray-700 min-h-[60px] italic">
                             {payment.status === 'OVERDUE'
-                                ? `Payment is overdue by ${overdueDays} days. Penalty rate: ${(contract.latePaymentPenaltyRate * 100).toFixed(2)}% / day.`
+                                ? `Payment is overdue by ${overdueDays} days. Penalty rate: ${((contract.latePaymentPenaltyRate || 0) * 100).toFixed(2)}% / day.`
                                 : (payment.status === 'PAID' ? 'Payment completed successfully.' : 'Waiting for payment.')
                             }
                         </div>
