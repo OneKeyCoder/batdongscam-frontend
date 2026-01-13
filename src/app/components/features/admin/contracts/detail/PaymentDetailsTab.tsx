@@ -26,7 +26,7 @@ export default function PaymentDetailsTab({ data, isEditing, editData, onEditCha
     const formatCurrency = (val?: number) => val !== undefined ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val) : '---';
 
     const total = data.totalContractAmount || 0;
-    const paid = data.totalPaymentsMade; 
+    const paid = data.totalPaymentsMade || 0; 
     const remaining = total - paid;
     const progress = total > 0 ? Math.round((paid / total) * 100) : 0;
 
@@ -88,7 +88,7 @@ export default function PaymentDetailsTab({ data, isEditing, editData, onEditCha
                                 </div>
                             </div>
                         ) : (
-                            <InfoItem icon={Percent} label="Late Payment Penalty Rate" value={`${(data.latePaymentPenaltyRate * 100).toFixed(2)}% per day`} isBold />
+                            <InfoItem icon={Percent} label="Late Payment Penalty Rate" value={`${((data.latePaymentPenaltyRate || 0) * 100).toFixed(2)}% per day`} isBold />
                         )}
 
                         <InfoItem icon={DollarSign} label="Deposit amount" value={formatCurrency(data.depositAmount)} isBold />

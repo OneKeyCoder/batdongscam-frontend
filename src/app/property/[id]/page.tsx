@@ -39,6 +39,23 @@ export default function PropertyDetailPage() {
   const [bookingError, setBookingError] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   const [bookingSuccess, setBookingSuccess] = useState(false);
+  
+  // Status change state (for property owners)
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [selectedStatus, setSelectedStatus] = useState('');
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [statusError, setStatusError] = useState('');
+  
+  // Owner can set these statuses
+  const ownerStatusOptions = [
+    { value: 'AVAILABLE', label: 'Available' },
+    { value: 'UNAVAILABLE', label: 'Unavailable' },
+    { value: 'SOLD', label: 'Sold' },
+    { value: 'RENTED', label: 'Rented' },
+  ];
+  
+  // Check if current user is the assigned sales agent
+  const isAssignedAgent = user && property?.assignedAgent?.id === user.id;
 
   // Fetch property details
   useEffect(() => {
@@ -218,6 +235,17 @@ export default function PropertyDetailPage() {
             {/* Edit & Delete - Only for owner */}
             {user && user.id === property.owner.id && (
               <>
+                {/* Change Status */}
+                <button
+                  onClick={() => {
+                    setSelectedStatus(property.status);
+                    setShowStatusModal(true);
+                  }}
+                  className="w-10 h-10 bg-white rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors shadow-lg"
+                  title="Change Status"
+                >
+                  <Shield className="w-5 h-5 text-gray-600" />
+                </button>
                 <Link
                   href={`/my/properties/${property.id}/edit`}
                   className="w-10 h-10 bg-white rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors shadow-lg"
@@ -243,6 +271,17 @@ export default function PropertyDetailPage() {
                   {isDeleting ? <Loader2 className="w-5 h-5 animate-spin text-gray-600" /> : <Trash2 className="w-5 h-5 text-gray-600 group-hover:text-red-600" />}
                 </button>
               </>
+            )}
+            
+            {/* Create Contract - For any sales agent on AVAILABLE/APPROVED properties */}
+            {user?.role === 'SALESAGENT' && ['AVAILABLE', 'APPROVED'].includes(property.status) && (
+              <Link
+                href={`/contracts/create?propertyId=${property.id}`}
+                className="px-4 py-2 bg-white rounded-full flex items-center gap-2 hover:bg-gray-100 transition-colors shadow-lg text-sm font-medium text-gray-700"
+              >
+                <FileText className="w-4 h-4" />
+                Create Contract
+              </Link>
             )}
           </div>
 
@@ -366,44 +405,33 @@ export default function PropertyDetailPage() {
                     Attached Documents
                   </h2>
                   <div className="space-y-3">
-                    {property.documentList.map((doc) => (
-                      <div
-                        key={doc.id}
-                        className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="flex items-center gap-3">
-                          <FileText className="w-5 h-5 text-red-600" />
-                          <div>
-                            <p className="font-medium text-gray-900">{doc.documentTypeName}</p>
-                            <p className="text-sm text-gray-500">{doc.documentName}</p>
+                    {property.documentList.map((doc) => {
+                      const handleDocClick = () => {
+                        // Open file in new tab - browser handles viewing/download
+                        window.open(doc.filePath, '_blank', 'noopener,noreferrer');
+                      };
+                      
+                      return (
+                        <button
+                          key={doc.id}
+                          onClick={handleDocClick}
+                          className="w-full flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:border-red-300 hover:bg-red-50/50 transition-colors cursor-pointer text-left"
+                        >
+                          <div className="flex items-center gap-3">
+                            <FileText className="w-5 h-5 text-red-600" />
+                            <div>
+                              <p className="font-medium text-gray-900">{doc.documentTypeName}</p>
+                              <p className="text-sm text-gray-500">{doc.documentName}</p>
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-700 rounded mr-2">
-                            {doc.verificationStatus}
-                          </span>
-                          {/* Preview Button */}
-                          <button
-                            onClick={() => setPreviewDocument({ url: doc.filePath, name: doc.documentName || 'Document' })}
-                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 transition-colors"
-                            title="Preview document"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          {/* Download Button */}
-                          <a
-                            href={doc.filePath}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            download
-                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-green-50 hover:bg-green-100 text-green-600 transition-colors"
-                            title="Download document"
-                          >
-                            <Download className="w-4 h-4" />
-                          </a>
-                        </div>
-                      </div>
-                    ))}
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-700 rounded">
+                              {doc.verificationStatus}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -648,6 +676,84 @@ export default function PropertyDetailPage() {
           </div>
         </div>
       )}
+      {/* Status Change Modal */}
+      <Modal
+        isOpen={showStatusModal}
+        onClose={() => {
+          setShowStatusModal(false);
+          setStatusError('');
+        }}
+        title="Change Property Status"
+      >
+        <div className="space-y-4">
+          {statusError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
+              {statusError}
+            </div>
+          )}
+          
+          <p className="text-gray-600 text-sm">
+            Select a new status for your property. This will affect how your property appears to potential buyers/renters.
+          </p>
+          
+          <div className="space-y-2">
+            {ownerStatusOptions.map((option) => (
+              <button
+                key={option.value}
+                onClick={() => setSelectedStatus(option.value)}
+                className={`w-full p-3 rounded-lg border text-left transition-colors ${
+                  selectedStatus === option.value
+                    ? 'border-red-500 bg-red-50 text-red-700'
+                    : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                }`}
+              >
+                <span className="font-medium">{option.label}</span>
+              </button>
+            ))}
+          </div>
+          
+          <div className="flex gap-3 pt-4">
+            <button
+              onClick={() => {
+                setShowStatusModal(false);
+                setStatusError('');
+              }}
+              className="flex-1 py-2.5 border border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={async () => {
+                if (!selectedStatus || selectedStatus === property?.status) {
+                  setShowStatusModal(false);
+                  return;
+                }
+                
+                setIsUpdatingStatus(true);
+                setStatusError('');
+                
+                try {
+                  const updated = await propertyService.updatePropertyStatus(propertyId, {
+                    status: selectedStatus as any
+                  });
+                  setProperty(updated);
+                  setShowStatusModal(false);
+                } catch (err: any) {
+                  console.error('Failed to update status:', err);
+                  setStatusError(err.response?.data?.message || 'Failed to update property status');
+                } finally {
+                  setIsUpdatingStatus(false);
+                }
+              }}
+              disabled={isUpdatingStatus || selectedStatus === property?.status}
+              className="flex-1 py-2.5 bg-red-600 text-white font-medium rounded-xl hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {isUpdatingStatus && <Loader2 className="w-4 h-4 animate-spin" />}
+              {isUpdatingStatus ? 'Updating...' : 'Update Status'}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Footer */}
       <Footer />

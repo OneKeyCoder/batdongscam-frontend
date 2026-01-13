@@ -2,25 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { Mail, Phone, Calendar, MapPin, Eye, EyeOff, Edit2, Building, DollarSign, Camera, Trash2, AlertTriangle, Loader2, Save, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { accountService } from '@/lib/api/services/account.service';
 import Skeleton from '@/app/components/ui/Skeleton';
 import Modal from '@/app/components/ui/Modal';
 
-const tabs = [
-  { key: 'properties', label: 'Properties', href: '/customer/properties' },
-  { key: 'favorites', label: 'Favorites', href: '/customer/favorites' },
-  { key: 'profile', label: 'My Profile', href: '/customer/profile' },
-  { key: 'viewings', label: 'Viewings', href: '/customer/viewings' },
-  { key: 'payments', label: 'Payments', href: '/customer/payments' },
-  { key: 'reports', label: 'Violation Reports', href: '/customer/reports' },
-  { key: 'notifications', label: 'Notifications', href: '/customer/notifications' },
-];
-
 export default function CustomerProfilePage() {
-  const pathname = usePathname();
   const router = useRouter();
   const { user, setUser, logout } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
@@ -220,25 +209,6 @@ export default function CustomerProfilePage() {
               </div>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Tab Navigation */}
-      <div className="border-b border-gray-200 mb-6 -mx-4 px-4">
-        <div className="flex gap-0 overflow-x-auto">
-          {tabs.map((tab) => (
-            <Link
-              key={tab.key}
-              href={tab.href}
-              className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                pathname === tab.href
-                  ? 'text-gray-900 border-gray-900'
-                  : 'text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              {tab.label}
-            </Link>
-          ))}
         </div>
       </div>
 

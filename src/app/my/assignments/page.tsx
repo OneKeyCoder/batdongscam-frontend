@@ -1,13 +1,13 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Building, MapPin, Eye, Check, X, Calendar, User, DollarSign, Clock, Filter, Search } from 'lucide-react';
+import { Building, MapPin, Eye, Calendar, User, FileText, Loader2, Search } from 'lucide-react';
 import Badge from '@/app/components/ui/Badge';
 import Modal from '@/app/components/ui/Modal';
 import Link from 'next/link';
 import { assignmentService } from '@/lib/api/services/assignment.service';
 
-type AssignmentStatus = 'Pending' | 'Accepted' | 'In Progress' | 'Completed' | 'Rejected';
+type PropertyStatus = 'PENDING' | 'REJECTED' | 'APPROVED' | 'SOLD' | 'RENTED' | 'AVAILABLE' | 'UNAVAILABLE' | 'REMOVED' | 'DELETED';
 
 interface Assignment {
   id: number;
@@ -19,30 +19,42 @@ interface Assignment {
   propertyType: 'Sale' | 'Rent';
   ownerName: string;
   ownerPhone: string;
-  status: AssignmentStatus;
+  status: PropertyStatus;
   assignedAt: string;
-  deadline: string;
-  commission: string;
   totalArea?: number;
   numberOfImages?: number;
   ownerTier?: string;
 }
 
-// Removed mock data - using real API
-
-const statusVariants: Record<AssignmentStatus, 'warning' | 'info' | 'success' | 'danger' | 'default'> = {
-  Pending: 'warning',
-  Accepted: 'info',
-  'In Progress': 'info',
-  Completed: 'success',
-  Rejected: 'danger',
+const statusVariants: Record<PropertyStatus, 'warning' | 'info' | 'success' | 'danger' | 'default'> = {
+  PENDING: 'warning',
+  REJECTED: 'danger',
+  APPROVED: 'info',
+  SOLD: 'success',
+  RENTED: 'success',
+  AVAILABLE: 'success',
+  UNAVAILABLE: 'default',
+  REMOVED: 'danger',
+  DELETED: 'danger',
 };
 
-export default function AssignmentsPage() {
+const statusLabels: Record<PropertyStatus, string> = {
+  PENDING: 'Pending',
+  REJECTED: 'Rejected',
+  APPROVED: 'Approved',
+  SOLD: 'Sold',
+  RENTED: 'Rented',
+  AVAILABLE: 'Available',
+  UNAVAILABLE: 'Unavailable',
+  REMOVED: 'Removed',
+  DELETED: 'Deleted',
+};
+
+export default function MyAssignmentsPage() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
-  const [filter, setFilter] = useState<'all' | 'pending' | 'active' | 'completed'>('all');
+  const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'available' | 'sold' | 'rented'>('all');
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
@@ -65,7 +77,6 @@ export default function AssignmentsPage() {
           return placeholders[Math.floor(Math.random() * placeholders.length)];
         }
         if (path.startsWith('http')) return path;
-        // Fallback for relative paths
         const placeholders = [
           'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=400',
           'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=400',
@@ -87,11 +98,8 @@ export default function AssignmentsPage() {
         ownerName: `${item.ownerFirstName || ''} ${item.ownerLastName || ''}`.trim() || 'Unknown',
         ownerPhone: item.ownerPhone || 'N/A',
         ownerTier: item.ownerTier || 'BRONZE',
-        status: item.status === 'AVAILABLE' ? 'In Progress' : 
-                item.status === 'PENDING' ? 'Pending' : 'In Progress',
+        status: item.status || 'AVAILABLE',
         assignedAt: item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'N/A',
-        deadline: item.deadline || 'No deadline',
-        commission: 'N/A', // API doesn't provide commission
         totalArea: item.totalArea,
         numberOfImages: item.numberOfImages
       }));
@@ -108,24 +116,22 @@ export default function AssignmentsPage() {
                           a.ownerName.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = 
       filter === 'all' ? true :
-      filter === 'pending' ? a.status === 'Pending' :
-      filter === 'active' ? (a.status === 'Accepted' || a.status === 'In Progress') :
-      filter === 'completed' ? (a.status === 'Completed' || a.status === 'Rejected') :
+      filter === 'pending' ? a.status === 'PENDING' :
+      filter === 'approved' ? a.status === 'APPROVED' :
+      filter === 'available' ? a.status === 'AVAILABLE' :
+      filter === 'sold' ? a.status === 'SOLD' :
+      filter === 'rented' ? a.status === 'RENTED' :
       true;
     return matchesSearch && matchesFilter;
   });
 
-  const handleAccept = (assignment: Assignment) => {
-    setAssignments(assignments.map(a =>
-      a.id === assignment.id ? { ...a, status: 'Accepted' as AssignmentStatus } : a
-    ));
-  };
-
-  const handleReject = (assignment: Assignment) => {
-    setAssignments(assignments.map(a =>
-      a.id === assignment.id ? { ...a, status: 'Rejected' as AssignmentStatus } : a
-    ));
-  };
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="w-8 h-8 text-red-600 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -134,10 +140,10 @@ export default function AssignmentsPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <Building className="w-6 h-6 text-red-600" />
-            Property Assignments
+            My Assigned Properties
           </h1>
           <p className="text-gray-500 text-sm mt-1">
-            Manage your assigned properties
+            Manage properties assigned to you
           </p>
         </div>
       </div>
@@ -155,8 +161,8 @@ export default function AssignmentsPage() {
           />
         </div>
         
-        <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
-          {(['all', 'pending', 'active', 'completed'] as const).map((f) => (
+        <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1 flex-wrap">
+          {(['all', 'pending', 'approved', 'available', 'sold', 'rented'] as const).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
@@ -205,7 +211,7 @@ export default function AssignmentsPage() {
                       For {assignment.propertyType}
                     </Badge>
                     <Badge variant={statusVariants[assignment.status]}>
-                      {assignment.status}
+                      {statusLabels[assignment.status]}
                     </Badge>
                   </div>
                 </div>
@@ -230,49 +236,39 @@ export default function AssignmentsPage() {
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">Images</p>
+                    <p className="text-xs text-gray-500">Assigned</p>
                     <p className="text-sm font-medium text-gray-900 mt-1">
-                      {assignment.numberOfImages || 0} photos
+                      {assignment.assignedAt}
                     </p>
                   </div>
                 </div>
 
                 {/* Actions */}
                 <div className="flex flex-wrap items-center gap-2 mt-4 pt-4 border-t border-gray-100">
-                  <button
-                    onClick={() => setSelectedAssignment(assignment)}
+                  <Link
+                    href={`/property/${assignment.propertyId}`}
                     className="flex items-center gap-1 px-4 py-2 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
                   >
                     <Eye className="w-4 h-4" />
                     View Details
+                  </Link>
+                  
+                  <button
+                    onClick={() => setSelectedAssignment(assignment)}
+                    className="flex items-center gap-1 px-4 py-2 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                  >
+                    <Calendar className="w-4 h-4" />
+                    Quick View
                   </button>
                   
-                  {assignment.status === 'Pending' && (
-                    <>
-                      <button
-                        onClick={() => handleAccept(assignment)}
-                        className="flex items-center gap-1 px-4 py-2 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors"
-                      >
-                        <Check className="w-4 h-4" />
-                        Accept
-                      </button>
-                      <button
-                        onClick={() => handleReject(assignment)}
-                        className="flex items-center gap-1 px-4 py-2 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
-                      >
-                        <X className="w-4 h-4" />
-                        Reject
-                      </button>
-                    </>
-                  )}
-                  
-                  {(assignment.status === 'Accepted' || assignment.status === 'In Progress') && (
+                  {/* Create Contract button for available/approved properties */}
+                  {['AVAILABLE', 'APPROVED'].includes(assignment.status) && (
                     <Link
-                      href={`/agent/appointments?property=${assignment.propertyId}`}
+                      href={`/contracts/create?propertyId=${assignment.propertyId}`}
                       className="flex items-center gap-1 px-4 py-2 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
                     >
-                      <Calendar className="w-4 h-4" />
-                      Schedule Viewing
+                      <FileText className="w-4 h-4" />
+                      Create Contract
                     </Link>
                   )}
                 </div>
@@ -319,7 +315,7 @@ export default function AssignmentsPage() {
               <div className="p-3 bg-gray-50 rounded-lg">
                 <p className="text-xs text-gray-500">Status</p>
                 <Badge variant={statusVariants[selectedAssignment.status]} className="mt-1">
-                  {selectedAssignment.status}
+                  {statusLabels[selectedAssignment.status]}
                 </Badge>
               </div>
               <div className="p-3 bg-gray-50 rounded-lg">
@@ -344,10 +340,6 @@ export default function AssignmentsPage() {
                 <p className="text-xs text-gray-500">Assigned Date</p>
                 <p className="font-medium text-gray-900">{selectedAssignment.assignedAt}</p>
               </div>
-              <div className="p-3 bg-gray-50 rounded-lg">
-                <p className="text-xs text-gray-500">Deadline</p>
-                <p className="font-medium text-gray-900">{selectedAssignment.deadline}</p>
-              </div>
             </div>
 
             {/* Owner Info */}
@@ -364,6 +356,24 @@ export default function AssignmentsPage() {
                   </Badge>
                 )}
               </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 pt-4 border-t">
+              <Link
+                href={`/property/${selectedAssignment.propertyId}`}
+                className="flex-1 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors text-center"
+              >
+                View Property Details
+              </Link>
+              {['AVAILABLE', 'APPROVED'].includes(selectedAssignment.status) && (
+                <Link
+                  href={`/contracts/create?propertyId=${selectedAssignment.propertyId}`}
+                  className="flex-1 py-2.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors text-center"
+                >
+                  Create Contract
+                </Link>
+              )}
             </div>
           </div>
         </Modal>

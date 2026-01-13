@@ -1,11 +1,14 @@
 'use client';
 
-import React, { useState, useEffect, useRef, Suspense } from 'react';
+import React, { useState, useEffect, useRef, Suspense, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { AlertTriangle, Plus, Eye, Shield, User, Building, Clock, Check, X, MessageSquare, Upload, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import Link from 'next/link';
+import { AlertTriangle, Plus, Eye, Shield, User, Building, Clock, Check, X, MessageSquare, Upload, Loader2, ChevronLeft, ChevronRight, Search, ExternalLink } from 'lucide-react';
 import Badge from '@/app/components/ui/Badge';
 import Modal from '@/app/components/ui/Modal';
 import { violationService, ViolationUserItem, ViolationUserDetails, ViolationCreateRequest } from '@/lib/api/services/violation.service';
+import { propertyService } from '@/lib/api/services/property.service';
+import { accountService, SaleAgentListItem, CustomerListItem, PropertyOwnerListItem } from '@/lib/api/services/account.service';
 
 type ReportStatus = 'PENDING' | 'REPORTED' | 'UNDER_REVIEW' | 'RESOLVED' | 'DISMISSED';
 type ViolationType = 'FRAUDULENT_LISTING' | 'MISREPRESENTATION_OF_PROPERTY' | 'SPAM_OR_DUPLICATE_LISTING' |
@@ -87,6 +90,106 @@ function ReportsContent({ initialType, initialTargetId }: ReportsContentProps) {
   });
   const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Search functionality for target selection
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Array<{ id: string; name: string; subtitle?: string }>>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  
+  // Debounced search function
+  const performSearch = useCallback(async (query: string, type: UIReportType) => {
+    if (query.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    
+    setIsSearching(true);
+    try {
+      if (type === 'Property') {
+        const response = await propertyService.getPropertyCards({ search: query, limit: 10 });
+        setSearchResults(response.data.map(p => ({
+          id: p.id,
+          name: p.title,
+          subtitle: p.location
+        })));
+      } else if (type === 'Agent') {
+        // Search sales agents
+        const response = await accountService.getAllSaleAgents({ name: query, limit: 10 });
+        setSearchResults(response.data.map((u: SaleAgentListItem) => ({
+          id: u.id,
+          name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || 'Agent',
+          subtitle: `Agent - Tier: ${u.tier || 'N/A'}`
+        })));
+      } else {
+        // For User (Customer/Owner), search customers and property owners
+        const [customersRes, ownersRes] = await Promise.all([
+          accountService.getAllCustomers({ name: query, limit: 5 }),
+          accountService.getAllPropertyOwners({ name: query, limit: 5 })
+        ]);
+        const customers = customersRes.data.map((u: CustomerListItem) => ({
+          id: u.id,
+          name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || 'Customer',
+          subtitle: `Customer - Tier: ${u.tier || 'N/A'}`
+        }));
+        const owners = ownersRes.data.map((u: PropertyOwnerListItem) => ({
+          id: u.id,
+          name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || 'Owner',
+          subtitle: `Property Owner - Tier: ${u.tier || 'N/A'}`
+        }));
+        setSearchResults([...customers, ...owners]);
+      }
+    } catch (err) {
+      console.error('Search failed:', err);
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  }, []);
+  
+  // Handle search input change with debounce
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const query = e.target.value;
+    setSearchQuery(query);
+    setShowSearchDropdown(true);
+    
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    
+    searchTimeoutRef.current = setTimeout(() => {
+      performSearch(query, newReport.type);
+    }, 300);
+  };
+  
+  // Select an item from search results
+  const handleSelectSearchResult = (item: { id: string; name: string }) => {
+    setNewReport({ ...newReport, targetId: item.id });
+    setSearchQuery(item.name);
+    setShowSearchDropdown(false);
+    setSearchResults([]);
+  };
+  
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowSearchDropdown(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+  
+  // Clear search when report type changes
+  useEffect(() => {
+    setSearchQuery('');
+    setNewReport(prev => ({ ...prev, targetId: '' }));
+    setSearchResults([]);
+  }, [newReport.type]);
 
   useEffect(() => {
     if (initialType && initialTargetId) {
@@ -372,18 +475,75 @@ function ReportsContent({ initialType, initialTargetId }: ReportsContentProps) {
               </div>
             </div>
 
-            <div>
+            <div ref={dropdownRef} className="relative">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                {newReport.type} ID
+                Search {newReport.type}
               </label>
-              <input
-                type="text"
-                value={newReport.targetId}
-                onChange={(e) => setNewReport({ ...newReport, targetId: e.target.value })}
-                placeholder={`Enter ${newReport.type.toLowerCase()} ID`}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-sm text-gray-900"
-                required
-              />
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={handleSearchChange}
+                  onFocus={() => searchQuery.length >= 2 && setShowSearchDropdown(true)}
+                  placeholder={`Search for ${newReport.type.toLowerCase()}...`}
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-sm text-gray-900"
+                />
+                {isSearching && (
+                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 animate-spin" />
+                )}
+              </div>
+              
+              {/* Search Results Dropdown */}
+              {showSearchDropdown && (searchResults.length > 0 || isSearching) && (
+                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  {isSearching ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="w-5 h-5 text-red-600 animate-spin" />
+                    </div>
+                  ) : (
+                    searchResults.map((result) => (
+                      <button
+                        key={result.id}
+                        type="button"
+                        onClick={() => handleSelectSearchResult(result)}
+                        className="w-full px-4 py-2.5 text-left hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0"
+                      >
+                        <p className="font-medium text-gray-900 text-sm truncate">{result.name}</p>
+                        {result.subtitle && (
+                          <p className="text-xs text-gray-500 truncate">{result.subtitle}</p>
+                        )}
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+              
+              {/* Selected Target Badge */}
+              {newReport.targetId && (
+                <div className="mt-2 flex items-center gap-2">
+                  <Badge variant="success">
+                    <Check className="w-3 h-3 mr-1" />
+                    Selected: {searchQuery || newReport.targetId.slice(0, 8) + '...'}
+                  </Badge>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewReport({ ...newReport, targetId: '' });
+                      setSearchQuery('');
+                    }}
+                    className="text-xs text-red-600 hover:text-red-700"
+                  >
+                    Clear
+                  </button>
+                </div>
+              )}
+              
+              {/* Fallback: Direct ID input */}
+              {searchQuery.length < 2 && !newReport.targetId && (
+                <p className="text-xs text-gray-500 mt-1.5">Type at least 2 characters to search, or paste ID directly</p>
+              )}
+              <input type="hidden" value={newReport.targetId} required />
             </div>
 
             <div>
@@ -523,6 +683,8 @@ function ReportsContent({ initialType, initialTargetId }: ReportsContentProps) {
                   <p className="font-medium text-gray-900">{selectedReportDetails.targetName}</p>
                 </div>
               </div>
+              
+              {/* Note: To make target navigable, backend needs to return reportedId and reportedType in ViolationUserDetails */}
 
               <div>
                 <p className="text-xs text-gray-500 mb-1">Description</p>

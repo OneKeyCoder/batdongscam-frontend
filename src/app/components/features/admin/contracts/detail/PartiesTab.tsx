@@ -40,7 +40,7 @@ export default function PartiesTab({ data, onReload }: Props) {
             setCurrentAgent({
                 id: data.agentId,
                 fullName: `${data.agentFirstName} ${data.agentLastName}`,
-                employeeCode: data.agentEmployeeCode,
+                employeeCode: data.agentEmployeeCode || '---',
                 phone: data.agentPhone || '---',
             });
         } else {
