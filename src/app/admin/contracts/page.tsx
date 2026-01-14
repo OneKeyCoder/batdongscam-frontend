@@ -20,7 +20,7 @@ export default function ContractsPage() {
   const [isAdvSearchOpen, setIsAdvSearchOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
-  // filter states for each contract type
+  // Separate filter states for each contract type
   const [depositFilters, setDepositFilters] = useState<DepositContractFilters>({ page: 1, size: 10, search: '' });
   const [purchaseFilters, setPurchaseFilters] = useState<PurchaseContractFilters>({ page: 1, size: 10, search: '' });
   const [keyword, setKeyword] = useState('');
@@ -50,7 +50,7 @@ export default function ContractsPage() {
           totalDepositContracts: totalDeposit,
           totalPurchaseContracts: totalPurchase,
           monthRevenue: dashboardRes?.monthRevenue || 0,
-          activeContracts: totalDeposit + totalPurchase 
+          activeContracts: totalDeposit + totalPurchase // Simplified - could filter by status
         });
       } catch (e) {
         console.error("Failed to fetch stats:", e);
@@ -60,6 +60,14 @@ export default function ContractsPage() {
     fetchStats();
   }, []);
 
+  // Get current filters based on active tab
+  const getCurrentFilters = () => activeTab === 'deposit' ? depositFilters : purchaseFilters;
+  const setCurrentFilters = (filters: any) => {
+    if (activeTab === 'deposit') setDepositFilters(filters);
+    else setPurchaseFilters(filters);
+  };
+
+  // Search handler
   const handleSearch = () => {
     const commonFilters = {
       page: 1,
@@ -81,26 +89,19 @@ export default function ContractsPage() {
         endDateTo: undefined,
       });
     } else {
-      setPurchaseFilters({
-        ...commonFilters,
-      });
+      // Purchase doesn't have endDate fields
+      setPurchaseFilters(commonFilters);
     }
   };
 
+  // Advanced search handlers
   const handleAdvApply = (advFilters: any) => {
-    if (activeTab === 'deposit') {
-      setDepositFilters(prev => ({
-        ...prev,
-        ...advFilters,
-        page: 1 
-      }));
-    } else {
-      setPurchaseFilters(prev => ({
-        ...prev,
-        ...advFilters,
-        page: 1
-      }));
-    }
+    const filters = {
+      ...advFilters,
+      size: getCurrentFilters().size || 10
+    };
+
+    setCurrentFilters(filters);
     setKeyword('');
     setIsAdvSearchOpen(false);
   };
@@ -126,31 +127,67 @@ export default function ContractsPage() {
     currency: 'USD'
   }).format(val).replace('US$', '$');
 
+  // Stats configuration
   const stats = [
-    { title: "Deposit Contracts", value: statsData.totalDepositContracts.toLocaleString(), trend: "", icon: Package, color: "text-red-600" },
-    { title: "Purchase Contracts", value: statsData.totalPurchaseContracts.toLocaleString(), trend: "", icon: FileText, color: "text-red-600" },
-    { title: "Active Contracts", value: statsData.activeContracts.toString(), trend: "", icon: FileText, color: "text-purple-600" },
-    { title: "Month Revenue", value: formatCurrency(statsData.monthRevenue), trend: "+5%", trendUp: true, icon: DollarSign, color: "text-red-600" },
+    {
+      title: "Deposit Contracts",
+      value: statsData.totalDepositContracts.toLocaleString(),
+      trend: "",
+      icon: Package,
+      color: "text-blue-600"
+    },
+    {
+      title: "Purchase Contracts",
+      value: statsData.totalPurchaseContracts.toLocaleString(),
+      trend: "",
+      icon: FileText,
+      color: "text-green-600"
+    },
+    {
+      title: "Active Contracts",
+      value: statsData.activeContracts.toString(),
+      trend: "",
+      icon: FileText,
+      color: "text-purple-600"
+    },
+    {
+      title: "Month Revenue",
+      value: formatCurrency(statsData.monthRevenue),
+      trend: "+5%",
+      trendUp: true,
+      icon: DollarSign,
+      color: "text-red-600"
+    },
   ];
 
-  let hasAdvancedFilters = false;
-
-  if (activeTab === 'deposit') {
-    const f = depositFilters;
-    hasAdvancedFilters = !!(
-      f.statuses?.length || f.startDateFrom || f.startDateTo ||
-      f.endDateFrom || f.endDateTo || 
-      f.customerId || f.agentId || f.propertyId || f.ownerId
-    );
-  } else {
-    const f = purchaseFilters;
-    hasAdvancedFilters = !!(
-      f.statuses?.length || f.startDateFrom || f.startDateTo ||
-      f.customerId || f.agentId || f.propertyId || f.ownerId
-    );
-  }
-
-  const currentFiltersSearch = activeTab === 'deposit' ? depositFilters.search : purchaseFilters.search;
+  // Check if there are advanced filters applied
+  const hasAdvancedFilters = (() => {
+    if (activeTab === 'deposit') {
+      const f = depositFilters;
+      return !!(
+        f.statuses?.length ||
+        f.startDateFrom ||
+        f.startDateTo ||
+        f.endDateFrom ||
+        f.endDateTo ||
+        f.customerId ||
+        f.agentId ||
+        f.propertyId ||
+        f.ownerId
+      );
+    } else {
+      const f = purchaseFilters;
+      return !!(
+        f.statuses?.length ||
+        f.startDateFrom ||
+        f.startDateTo ||
+        f.customerId ||
+        f.agentId ||
+        f.propertyId ||
+        f.ownerId
+      );
+    }
+  })();
 
   return (
     <div className="space-y-6">
@@ -162,26 +199,6 @@ export default function ContractsPage() {
 
       {/* Stats Grid */}
       <StatsGrid stats={stats} />
-
-      {/* Contract Type Tabs */}
-      <div className="bg-white border border-gray-200 rounded-xl p-1.5 inline-flex gap-1 shadow-sm">
-        <button
-          onClick={() => { setActiveTab('deposit'); setKeyword(''); }}
-          className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'deposit' ? 'bg-red-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
-        >
-          <div className="flex items-center gap-2">
-            <Package className="w-4 h-4" /> Deposit Contracts
-          </div>
-        </button>
-        <button
-          onClick={() => { setActiveTab('purchase'); setKeyword(''); }}
-          className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'purchase' ? 'bg-red-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
-        >
-          <div className="flex items-center gap-2">
-            <FileText className="w-4 h-4" /> Purchase Contracts
-          </div>
-        </button>
-      </div>
 
       {/* Search and Filters */}
       <div className="space-y-4">
@@ -217,18 +234,24 @@ export default function ContractsPage() {
                 <span className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded hidden sm:inline-block">
                   Filters applied
                 </span>
-                <button onClick={handleResetFilters} className="text-xs text-red-600 underline hover:text-red-700 whitespace-nowrap">
+                <button
+                  onClick={handleResetFilters}
+                  className="text-xs text-red-600 underline hover:text-red-700 whitespace-nowrap"
+                >
                   Clear all
                 </button>
               </div>
             )}
 
-            {currentFiltersSearch && !hasAdvancedFilters && (
+            {!hasAdvancedFilters && ((activeTab === 'deposit' && depositFilters.search) || (activeTab === 'purchase' && purchaseFilters.search)) && (
               <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-600 bg-red-50 px-2 py-1 rounded">
-                  Search: "{currentFiltersSearch}"
+                <span className="text-xs text-gray-600 bg-blue-50 px-2 py-1 rounded">
+                  Search: "{activeTab === 'deposit' ? depositFilters.search : purchaseFilters.search}"
                 </span>
-                <button onClick={handleResetFilters} className="text-xs text-red-600 underline hover:text-red-700">
+                <button
+                  onClick={handleResetFilters}
+                  className="text-xs text-red-600 underline hover:text-red-700"
+                >
                   Clear
                 </button>
               </div>
@@ -237,10 +260,41 @@ export default function ContractsPage() {
 
           <button
             onClick={() => setIsAddModalOpen(true)}
-            className={`flex items-center gap-2 px-6 py-2.5 text-white font-bold rounded-xl shadow-sm transition-colors text-sm ${activeTab === 'deposit' ? 'bg-red-600 hover:bg-red-700' : 'bg-red-600 hover:bg-red-700'}`}
+            className={`flex items-center gap-2 px-6 py-2.5 text-white font-bold rounded-xl shadow-sm transition-colors text-sm ${activeTab === 'deposit'
+              ? 'bg-red-600 hover:bg-red-700'
+              : 'bg-red-600 hover:bg-red-700'
+              }`}
           >
             <Plus className="w-5 h-5" />
             Add {activeTab === 'deposit' ? 'Deposit' : 'Purchase'} Contract
+          </button>
+        </div>
+
+        {/* Contract Type Tabs - Border Bottom Style */}
+        <div className="flex gap-6 border-b border-gray-200">
+          <button
+            onClick={() => {
+              setActiveTab('deposit');
+              setKeyword('');
+            }}
+            className={`pb-3 text-sm font-bold border-b-2 transition-colors px-2 ${activeTab === 'deposit'
+              ? 'border-red-600 text-red-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+          >
+            Deposit Contracts
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab('purchase');
+              setKeyword('');
+            }}
+            className={`pb-3 text-sm font-bold border-b-2 transition-colors px-2 ${activeTab === 'purchase'
+              ? 'border-red-600 text-red-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+          >
+            Purchase Contracts
           </button>
         </div>
       </div>
@@ -266,13 +320,13 @@ export default function ContractsPage() {
       >
         {activeTab === 'deposit' ? (
           <DepositContractAdvancedSearch
-            key={isAdvSearchOpen ? 'open-dep' : 'closed-dep'}
+            key={isAdvSearchOpen ? 'open' : 'closed'}
             onApply={handleAdvApply}
             onReset={handleResetFilters}
           />
         ) : (
           <PurchaseContractAdvancedSearch
-            key={isAdvSearchOpen ? 'open-pur' : 'closed-pur'}
+            key={isAdvSearchOpen ? 'open' : 'closed'}
             onApply={handleAdvApply}
             onReset={handleResetFilters}
           />

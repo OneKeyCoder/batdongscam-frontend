@@ -93,17 +93,17 @@ export default function AdminSidebarNav() {
 
   // Menu items (Giữ nguyên)
   const menuItems: MenuItemProps[] = useMemo(() => [
-    { href: '/admin/dashboard', icon: LayoutDashboard, label: 'Overview', badge: 12 },
-    { href: '/admin/properties', icon: Building, label: 'Properties', badge: 5 },
+    { href: '/admin/dashboard', icon: LayoutDashboard, label: 'Overview'},
+    { href: '/admin/properties', icon: Building, label: 'Properties'},
     { href: '/admin/locations', icon: MapPin, label: 'Locations' },
-    { href: '/admin/agents', icon: Users, label: 'Agents', badge: 12 },
-    { href: '/admin/appointments', icon: Calendar, label: 'Appointments', badge: 99 },
-    { href: '/admin/customers', icon: UserCircle, label: 'Customers & Owners', badge: 2 },
+    { href: '/admin/agents', icon: Users, label: 'Agents'},
+    { href: '/admin/appointments', icon: Calendar, label: 'Appointments'},
+    { href: '/admin/customers', icon: UserCircle, label: 'Customers & Owners'},
     { href: '/admin/contracts', icon: FileText, label: 'Contracts' },
     { href: '/admin/payments', icon: Wallet, label: 'Payments' },
     { href: '/admin/violations', icon: MessageSquareWarning, label: 'Violations' },
     { href: '/admin/reports', icon: BarChart3, label: 'Statistic Reports' },
-    { href: '/admin/notifications', icon: Bell, label: 'Notifications', badge: '99+' },
+    { href: '/admin/notifications', icon: Bell, label: 'Notifications'},
     { href: '/admin/ai-chat', icon: Sparkles, label: 'AI Assistant', badge: 'New' },
   ], []);
 

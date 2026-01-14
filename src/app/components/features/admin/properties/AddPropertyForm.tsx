@@ -18,7 +18,7 @@ export default function AddPropertyForm({ onSuccess, onCancel }: AddPropertyForm
     // Validation Errors State
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-    // Refs để scroll đến field bị lỗi
+    // Refs
     const titleRef = useRef<HTMLDivElement>(null);
     const typeRef = useRef<HTMLDivElement>(null);
     const ownerRef = useRef<HTMLDivElement>(null);
@@ -72,28 +72,40 @@ export default function AddPropertyForm({ onSuccess, onCancel }: AddPropertyForm
                 setPropertyTypes(types);
                 setCities(cityMap);
             } catch (err) {
-                console.error("Failed to load init data", err);
+                console.error("Failed to load init data", err); 
             }
         };
         initData();
     }, []);
 
-    // 2. Owner Search Logic
+    // 2. Owner Search Logic (Client-side filtering for accuracy)
     useEffect(() => {
         const delayDebounceFn = setTimeout(async () => {
-            if (ownerSearchQuery.length >= 2) {
+            const cleanQuery = ownerSearchQuery.trim();
+
+            if (cleanQuery.length >= 1) { 
                 setIsSearchingOwner(true);
                 try {
                     const response = await accountService.getAllPropertyOwners({
-                        name: ownerSearchQuery,
+                        name: cleanQuery,
                         page: 1,
-                        limit: 5
+                        limit: 20 
                     });
-                    const owners = (response as any).data || (response as any).content || [];
-                    setFoundOwners(owners);
+                    const rawOwners = (response as any).data || (response as any).content || [];
+
+                    const filteredOwners = rawOwners.filter((owner: PropertyOwnerListItem) => {
+                        const queryLower = cleanQuery.toLowerCase();
+                        const fullName = `${owner.firstName || ''} ${owner.lastName || ''}`.toLowerCase();
+                        const displayId = (owner.id || '').split('-')[0].toLowerCase();
+
+                        return fullName.includes(queryLower) || displayId.includes(queryLower);
+                    });
+
+                    setFoundOwners(filteredOwners);
                     setShowOwnerDropdown(true);
                 } catch (error) {
                     console.error("Search owner failed", error);
+                    setFoundOwners([]);
                 } finally {
                     setIsSearchingOwner(false);
                 }
@@ -144,10 +156,7 @@ export default function AddPropertyForm({ onSuccess, onCancel }: AddPropertyForm
     // 4. Input Handler
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
-
-        if (value && fieldErrors[name]) {
-            setFieldErrors(prev => ({ ...prev, [name]: '' }));
-        }
+        if (value && fieldErrors[name]) setFieldErrors(prev => ({ ...prev, [name]: '' }));
 
         setFormData(prev => {
             const newData = { ...prev } as any;
@@ -209,21 +218,32 @@ export default function AddPropertyForm({ onSuccess, onCancel }: AddPropertyForm
             if (firstErrorRef && firstErrorRef.current) {
                 firstErrorRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
+            console.warn("Validation failed:", errors);
+            window.alert("Please fill in all required fields."); 
             return;
         }
 
         try {
+            console.log("Submitting data:", formData);
             await propertyService.createProperty(formData, selectedImages);
+            
+            console.log("Create Property successfully!"); 
+            window.alert("Create Property successfully!"); 
+            
             onSuccess();
         } catch (err: any) {
-            console.error("Create failed", err);
-            setGeneralError(err.response?.data?.message || "Failed to create property.");
+            console.error("Create failed", err); 
+            
+            const errorMessage = err.response?.data?.message || "Failed to create property.";
+            setGeneralError(errorMessage); 
+            
+            window.alert(errorMessage); 
         } finally {
             setLoading(false);
         }
     };
 
-    // CSS Helper: Đổi focus ring sang Red
+    // CSS Helper
     const getInputClass = (fieldName: string) => `
     w-full border rounded-xl px-4 py-3 text-sm outline-none transition-all 
     ${fieldErrors[fieldName]
