@@ -1,272 +1,519 @@
 import apiClient from '../client';
-import { SingleResponse, ListResponse, PaginatedResponse } from '../types';
+import { SingleResponse, PaginatedResponse } from '../types';
+
+// =============================
+// CONTRACT ENDPOINTS
+// =============================
 
 const CONTRACT_ENDPOINTS = {
-  CONTRACTS: '/contracts',
-  MY_CONTRACTS: '/contracts/my',
-  AGENT_CONTRACTS: '/contracts/agent/my',
-  OWNER_CONTRACTS: '/contracts/owner/my',
-  CONTRACT_DETAIL: (id: string) => `/contracts/${id}`,
-  CREATE: '/contracts',
-  SIGN: (id: string) => `/contracts/${id}/sign`,
-  CANCEL: (id: string) => `/contracts/${id}/cancel`,
-  RATE: (id: string) => `/contracts/${id}/rate`,
+  // Deposit Contract Endpoints
+  DEPOSIT_CONTRACTS: '/contracts/deposit',
+  DEPOSIT_CONTRACT_DETAIL: (id: string) => `/contracts/deposit/${id}`,
+  DEPOSIT_APPROVE: (id: string) => `/contracts/deposit/${id}/approve`,
+  DEPOSIT_CREATE_PAYMENT: (id: string) => `/contracts/deposit/${id}/create-payment`,
+  DEPOSIT_COMPLETE_PAPERWORK: (id: string) => `/contracts/deposit/${id}/complete-paperwork`,
+  DEPOSIT_CANCEL: (id: string) => `/contracts/deposit/${id}/cancel`,
+  DEPOSIT_VOID: (id: string) => `/contracts/deposit/${id}/void`,
+
+  // Purchase Contract Endpoints
+  PURCHASE_CONTRACTS: '/contracts/purchase',
+  PURCHASE_CONTRACT_DETAIL: (id: string) => `/contracts/purchase/${id}`,
+  PURCHASE_APPROVE: (id: string) => `/contracts/purchase/${id}/approve`,
+  PURCHASE_COMPLETE_PAPERWORK: (id: string) => `/contracts/purchase/${id}/complete-paperwork`,
+  PURCHASE_CANCEL: (id: string) => `/contracts/purchase/${id}/cancel`,
+  PURCHASE_VOID: (id: string) => `/contracts/purchase/${id}/void`,
 };
 
-export interface CreateContractRequest {
+// =============================
+// ENUMS
+// =============================
+
+export type ContractStatus =
+  | 'DRAFT'
+  | 'WAITING_OFFICIAL'
+  | 'PENDING_PAYMENT'
+  | 'ACTIVE'
+  | 'COMPLETED'
+  | 'CANCELLED'
+
+export type MainContractType = 'RENTAL' | 'PURCHASE' | 'DEPOSIT';
+
+export type RoleEnum = 'CUSTOMER' | 'PROPERTY_OWNER' | 'SALESAGENT' | 'ADMIN';
+
+export type SortDirection = 'ASC' | 'DESC';
+
+// =============================
+// DEPOSIT CONTRACT TYPES
+// =============================
+
+export interface CreateDepositContractRequest {
   propertyId: string;
+  agentId?: string; // Required when user is Admin, otherwise defaults to current sales agent
   customerId: string;
-  agentId: string;
-  contractType: 'PURCHASE' | 'RENTAL';
-  startDate: string; // ISO format: "2025-01-01"
-  endDate: string;
-  specialTerms?: string;
-  contractPaymentType: 'MORTGAGE' | 'MONTHLY_RENT' | 'PAID_IN_FULL';
-  totalContractAmount: number;
+  mainContractType: MainContractType; // RENTAL or PURCHASE
   depositAmount: number;
-  advancePaymentAmount?: number;
-  installmentAmount?: number;
-  progressMilestone?: number;
-  latePaymentPenaltyRate: number; // Decimal: 0.05 for 5%
-  specialConditions?: string;
+  agreedPrice: number; // Monthly rent for RENTAL, property value for PURCHASE
+  endDate?: string; // ISO format: "2026-02-26"
+  specialTerms?: string;
+  cancellationPenalty?: number; // Defaults to deposit amount if not provided
 }
 
-export interface UpdateContractRequest {
+export interface UpdateDepositContractRequest {
+  agentId?: string;
+  customerId?: string;
+  mainContractType?: MainContractType;
+  depositAmount?: number;
+  agreedPrice?: number;
+  startDate?: string;
   endDate?: string;
   specialTerms?: string;
-  status?: 'DRAFT' | 'PENDING_SIGNING' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
-  latePaymentPenaltyRate?: number;
-  specialConditions?: string;
-}
-
-export interface CancelContractRequest {
-  reason: string;
-  waivePenalty?: boolean;
-}
-
-export interface ContractDetailResponse {
-  id: string;
-  contractNumber: string;
-  contractType: string;
-  status: string;
-  contractPaymentType: string;
-  totalContractAmount: number;
-  depositAmount: number;
-  remainingAmount: number;
-  advancePaymentAmount?: number;
-  installmentAmount?: number;
-  progressMilestone?: number;
-  finalPaymentAmount?: number;
-  latePaymentPenaltyRate: number;
-  startDate: string;
-  endDate: string;
-  signedAt?: string;
-  completedAt?: string;
-  specialTerms?: string;
-  specialConditions?: string;
-  cancellationReason?: string;
   cancellationPenalty?: number;
-  cancelledBy?: string;
-  rating?: number;
-  comment?: string;
-  propertyId: string;
-  propertyTitle: string;
-  propertyAddress: string;
-  propertyPrice: number;
-  propertyType: string;
-  propertyTransactionType: string;
-  customerId: string;
-  customerFirstName: string;
-  customerLastName: string;
-  customerPhone: string;
-  customerEmail: string;
-  ownerId: string;
-  ownerFirstName: string;
-  ownerLastName: string;
-  ownerPhone: string;
-  agentId: string;
-  agentFirstName: string;
-  agentLastName: string;
-  agentEmployeeCode: string;
-  agentPhone: string;
-  totalPaymentsMade: number;
-  paymentCount: number;
-  payments: PaymentSummary[];
-  createdAt: string;
-  updatedAt: string;
+}
+
+export interface CancelDepositContractRequest {
+  cancellationReason: string;
+}
+
+export interface PropertySummary {
+  id: string;
+  title: string;
+  fullAddress: string;
+  priceAmount: number;
+}
+
+export interface UserSummary {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
 }
 
 export interface PaymentSummary {
   id: string;
   paymentType: string;
-  status: string;
   amount: number;
-  dueDate: string;
-  paidDate?: string;
-  installmentNumber?: number;
+  dueDate: string; // LocalDate
+  paidTime?: string; // LocalDateTime
+  status: string;
+  checkoutUrl?: string;
 }
 
-export interface ContractListItem {
+export interface DepositContractDetailResponse {
   id: string;
+  status: ContractStatus;
   contractNumber: string;
-  contractType: string;
-  status: string;
-  totalContractAmount: number;
+  mainContractType: MainContractType;
+  depositAmount: number;
+  agreedPrice: number;
+  startDate: string; // LocalDate
+  endDate: string; // LocalDate
+  signedAt?: string; // LocalDateTime
+  specialTerms?: string;
+  cancellationPenalty?: number;
+  cancellationReason?: string;
+  cancelledBy?: RoleEnum;
+  property: PropertySummary;
+  customer: UserSummary;
+  owner: UserSummary;
+  agent: UserSummary;
+  payments: PaymentSummary[];
+  linkedToMainContract: boolean;
+  linkedRentalContractId?: string;
+  linkedPurchaseContractId?: string;
+  createdAt: string; // LocalDateTime
+  updatedAt: string; // LocalDateTime
+}
+
+export interface DepositContractListItem {
+  id: string;
+  status: ContractStatus;
+  contractNumber: string;
+  mainContractType: MainContractType;
+  depositAmount: number;
+  agreedPrice: number;
   startDate: string;
   endDate: string;
-  signedAt?: string;
   propertyId: string;
   propertyTitle: string;
-  propertyAddress: string;
   customerId: string;
-  customerFirstName: string;
-  customerLastName: string;
+  customerName: string;
   agentId: string;
-  agentFirstName: string;
-  agentLastName: string;
-  agentEmployeeCode: string;
+  agentName: string;
+  linkedToMainContract: boolean;
   createdAt: string;
+  updatedAt: string;
 }
 
-export interface ContractFilters {
+export interface DepositContractFilters {
   page?: number;
   size?: number;
   sortBy?: string;
-  sortDirection?: 'ASC' | 'DESC';
-  contractTypes?: ('PURCHASE' | 'RENTAL')[];
-  statuses?: ('DRAFT' | 'PENDING_SIGNING' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED')[];
+  sortDirection?: SortDirection;
+  statuses?: ContractStatus[];
   customerId?: string;
   agentId?: string;
   propertyId?: string;
-  startDateFrom?: string;
+  ownerId?: string;
+  startDateFrom?: string; // ISO date format
   startDateTo?: string;
   endDateFrom?: string;
   endDateTo?: string;
   search?: string;
 }
 
-export interface MyContractsFilters {
-  page?: number;
-  size?: number;
-  statuses?: ('DRAFT' | 'PENDING_SIGNING' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED')[];
+// =============================
+// PURCHASE CONTRACT TYPES
+// =============================
+
+export interface CreatePurchaseContractRequest {
+  propertyId: string;
+  agentId?: string; // Required when user is Admin, otherwise defaults to current sales agent
+  customerId: string;
+  depositContractId?: string; // Optional link to deposit contract
+  propertyValue: number; // Must match deposit's agreedPrice if deposit exists
+  advancePaymentAmount: number; // Can be zero
+  commissionAmount: number;
+  startDate: string; // ISO format: "2025-01-01"
+  specialTerms?: string;
 }
 
+export interface UpdatePurchaseContractRequest {
+  agentId?: string;
+  customerId?: string;
+  propertyValue?: number;
+  advancePaymentAmount?: number;
+  commissionAmount?: number;
+  startDate?: string;
+  specialTerms?: string;
+}
+
+export interface CancelPurchaseContractRequest {
+  cancellationReason: string;
+}
+
+export interface PurchaseContractDetailResponse {
+  id: string;
+  status: ContractStatus;
+  contractNumber: string;
+  propertyValue: number;
+  advancePaymentAmount: number;
+  commissionAmount: number;
+  startDate: string; // LocalDate
+  signedAt?: string; // LocalDateTime
+  specialTerms?: string;
+  cancellationReason?: string;
+  cancelledBy?: RoleEnum;
+  property: PropertySummary;
+  customer: UserSummary;
+  owner: UserSummary;
+  agent: UserSummary;
+  depositContractId?: string;
+  depositContractStatus?: ContractStatus;
+  payments: PaymentSummary[];
+  createdAt: string; // LocalDateTime
+  updatedAt: string; // LocalDateTime
+}
+
+export interface PurchaseContractListItem {
+  id: string;
+  status: ContractStatus;
+  contractNumber: string;
+  propertyValue: number;
+  advancePaymentAmount: number;
+  commissionAmount: number;
+  startDate: string;
+  propertyId: string;
+  propertyTitle: string;
+  customerId: string;
+  customerName: string;
+  agentId: string;
+  agentName: string;
+  hasDepositContract: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PurchaseContractFilters {
+  page?: number;
+  size?: number;
+  sortBy?: string;
+  sortDirection?: SortDirection;
+  statuses?: ContractStatus[];
+  customerId?: string;
+  agentId?: string;
+  propertyId?: string;
+  ownerId?: string;
+  startDateFrom?: string;
+  startDateTo?: string;
+  search?: string;
+}
+
+// =============================
+// CONTRACT SERVICE
+// =============================
+
 export const contractService = {
+  // =============================
+  // DEPOSIT CONTRACT METHODS
+  // =============================
+
   /**
-    * Create a new contract (Admin/Agent only)
-    */
-  async createContract(data: CreateContractRequest): Promise<ContractDetailResponse> {
-    const response = await apiClient.post<SingleResponse<ContractDetailResponse>>(
-      CONTRACT_ENDPOINTS.CONTRACTS,
+   * Create a new deposit contract (Admin/Agent only)
+   * Status: DRAFT
+   */
+  async createDepositContract(
+    data: CreateDepositContractRequest
+  ): Promise<DepositContractDetailResponse> {
+    const response = await apiClient.post<SingleResponse<DepositContractDetailResponse>>(
+      CONTRACT_ENDPOINTS.DEPOSIT_CONTRACTS,
       data
     );
     return response.data.data;
   },
 
   /**
-   * Get contract details by ID
+   * Get deposit contract details by ID
+   * Access: Admin, Agent, Customer, Property Owner
    */
-  async getContractById(id: string): Promise<ContractDetailResponse> {
-    const response = await apiClient.get<SingleResponse<ContractDetailResponse>>(
-      CONTRACT_ENDPOINTS.CONTRACT_DETAIL(id)
+  async getDepositContractById(id: string): Promise<DepositContractDetailResponse> {
+    const response = await apiClient.get<SingleResponse<DepositContractDetailResponse>>(
+      CONTRACT_ENDPOINTS.DEPOSIT_CONTRACT_DETAIL(id)
     );
     return response.data.data;
   },
 
   /**
-   * Get paginated list of contracts (Admin/Agent only)
+   * Get paginated list of deposit contracts (Admin/Agent only)
+   * Agents only see their assigned contracts
    */
-  async getContracts(filters?: ContractFilters): Promise<PaginatedResponse<ContractListItem>> {
+  async getDepositContracts(
+    filters?: DepositContractFilters
+  ): Promise<PaginatedResponse<DepositContractListItem>> {
     const params = { ...filters };
     if (params.page && params.page > 0) {
-        params.page = params.page - 1;
+      params.page = params.page - 1;
     } else {
-        params.page = 0; 
+      params.page = 0;
     }
-    const response = await apiClient.get<PaginatedResponse<ContractListItem>>(
-      CONTRACT_ENDPOINTS.CONTRACTS,
+
+    const response = await apiClient.get<PaginatedResponse<DepositContractListItem>>(
+      CONTRACT_ENDPOINTS.DEPOSIT_CONTRACTS,
       { params }
-    );  
+    );
     return response.data;
   },
 
   /**
-   * Update contract (Admin/Agent only)
+   * Update deposit contract (Admin/Agent only)
+   * Only allowed for DRAFT status
    */
-  async updateContract(id: string, data: UpdateContractRequest): Promise<ContractDetailResponse> {
-    const response = await apiClient.put<SingleResponse<ContractDetailResponse>>(
-      CONTRACT_ENDPOINTS.CONTRACT_DETAIL(id),
+  async updateDepositContract(
+    id: string,
+    data: UpdateDepositContractRequest
+  ): Promise<DepositContractDetailResponse> {
+    const response = await apiClient.put<SingleResponse<DepositContractDetailResponse>>(
+      CONTRACT_ENDPOINTS.DEPOSIT_CONTRACT_DETAIL(id),
       data
     );
     return response.data.data;
   },
 
   /**
-   * Sign a contract (Admin/Agent only)
+   * Delete deposit contract (Admin/Agent only)
+   * Only allowed for DRAFT status (hard delete)
    */
-  async signContract(id: string): Promise<ContractDetailResponse> {
-    const response = await apiClient.post<SingleResponse<ContractDetailResponse>>(
-      CONTRACT_ENDPOINTS.SIGN(id)
+  async deleteDepositContract(id: string): Promise<void> {
+    await apiClient.delete(CONTRACT_ENDPOINTS.DEPOSIT_CONTRACT_DETAIL(id));
+  },
+
+  /**
+   * Approve deposit contract (Admin/Agent only)
+   * Transitions: DRAFT -> WAITING_OFFICIAL
+   */
+  async approveDepositContract(id: string): Promise<DepositContractDetailResponse> {
+    const response = await apiClient.post<SingleResponse<DepositContractDetailResponse>>(
+      CONTRACT_ENDPOINTS.DEPOSIT_APPROVE(id)
     );
     return response.data.data;
   },
 
   /**
-   * Cancel a contract
+   * Create deposit payment (Admin/Agent only)
+   * Only allowed when contract is in WAITING_OFFICIAL state
+   * Creates payment and notifies customer
    */
-  async cancelContract(id: string, data: CancelContractRequest): Promise<ContractDetailResponse> {
-    const response = await apiClient.post<SingleResponse<ContractDetailResponse>>(
-      CONTRACT_ENDPOINTS.CANCEL(id),
+  async createDepositPayment(id: string): Promise<DepositContractDetailResponse> {
+    const response = await apiClient.post<SingleResponse<DepositContractDetailResponse>>(
+      CONTRACT_ENDPOINTS.DEPOSIT_CREATE_PAYMENT(id)
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Mark paperwork complete (Admin/Agent only)
+   * Auto-creates payment if not exists
+   * Transitions: WAITING_OFFICIAL -> PENDING_PAYMENT
+   */
+  async markDepositPaperworkComplete(id: string): Promise<DepositContractDetailResponse> {
+    const response = await apiClient.post<SingleResponse<DepositContractDetailResponse>>(
+      CONTRACT_ENDPOINTS.DEPOSIT_COMPLETE_PAPERWORK(id)
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Cancel deposit contract (Customer/Owner only)
+   * Customer cancels: deposit goes to owner
+   * Owner cancels: deposit returns to customer, owner pays penalty
+   */
+  async cancelDepositContract(
+    id: string,
+    data: CancelDepositContractRequest
+  ): Promise<DepositContractDetailResponse> {
+    const response = await apiClient.post<SingleResponse<DepositContractDetailResponse>>(
+      CONTRACT_ENDPOINTS.DEPOSIT_CANCEL(id),
       data
     );
     return response.data.data;
   },
 
   /**
-   * Get my contracts (Customer only)
+   * Void deposit contract (Admin only)
+   * No side effects, no money transfers
    */
-  async getMyContracts(filters?: MyContractsFilters): Promise<PaginatedResponse<ContractListItem>> {
-    const response = await apiClient.get<PaginatedResponse<ContractListItem>>(
-      CONTRACT_ENDPOINTS.MY_CONTRACTS,
-      { params: filters }
+  async voidDepositContract(id: string): Promise<DepositContractDetailResponse> {
+    const response = await apiClient.post<SingleResponse<DepositContractDetailResponse>>(
+      CONTRACT_ENDPOINTS.DEPOSIT_VOID(id)
     );
-    return response.data;
+    return response.data.data;
   },
 
-  /**
-   * Get my agent contracts (Agent only)
-   */
-  async getMyAgentContracts(filters?: MyContractsFilters): Promise<PaginatedResponse<ContractListItem>> {
-    const response = await apiClient.get<PaginatedResponse<ContractListItem>>(
-      CONTRACT_ENDPOINTS.AGENT_CONTRACTS,
-      { params: filters }
-    );
-    return response.data;
-  },
+  // =============================
+  // PURCHASE CONTRACT METHODS
+  // =============================
 
   /**
-   * Rate a completed contract (Customer only)
+   * Create a new purchase contract (Admin/Agent only)
+   * Status: DRAFT
+   * If depositContractId provided, validates deposit is ACTIVE and not expired
    */
-  async rateContract(id: string, rating: number, comment?: string): Promise<ContractDetailResponse> {
-    const response = await apiClient.post<SingleResponse<ContractDetailResponse>>(
-      CONTRACT_ENDPOINTS.RATE(id),
-      null,
-      {
-        params: { rating, comment },
-      }
+  async createPurchaseContract(
+    data: CreatePurchaseContractRequest
+  ): Promise<PurchaseContractDetailResponse> {
+    const response = await apiClient.post<SingleResponse<PurchaseContractDetailResponse>>(
+      CONTRACT_ENDPOINTS.PURCHASE_CONTRACTS,
+      data
     );
     return response.data.data;
   },
 
   /**
-   * Get my owner contracts (Property Owner only)
-   * Returns contracts for properties owned by the current user
+   * Get purchase contract details by ID
+   * Access: Admin, Agent, Customer, Property Owner
    */
-  async getMyOwnerContracts(filters?: MyContractsFilters): Promise<PaginatedResponse<ContractListItem>> {
-    const response = await apiClient.get<PaginatedResponse<ContractListItem>>(
-      CONTRACT_ENDPOINTS.OWNER_CONTRACTS,
-      { params: filters }
+  async getPurchaseContractById(id: string): Promise<PurchaseContractDetailResponse> {
+    const response = await apiClient.get<SingleResponse<PurchaseContractDetailResponse>>(
+      CONTRACT_ENDPOINTS.PURCHASE_CONTRACT_DETAIL(id)
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Get paginated list of purchase contracts (Admin/Agent only)
+   * Agents only see their assigned contracts
+   */
+  async getPurchaseContracts(
+    filters?: PurchaseContractFilters
+  ): Promise<PaginatedResponse<PurchaseContractListItem>> {
+    const params = { ...filters };
+    // Convert page to 0-based index for backend
+    if (params.page && params.page > 0) {
+      params.page = params.page - 1;
+    } else {
+      params.page = 0;
+    }
+
+    const response = await apiClient.get<PaginatedResponse<PurchaseContractListItem>>(
+      CONTRACT_ENDPOINTS.PURCHASE_CONTRACTS,
+      { params }
     );
     return response.data;
+  },
+
+  /**
+   * Update purchase contract (Admin/Agent only)
+   * Only allowed for DRAFT status
+   */
+  async updatePurchaseContract(
+    id: string,
+    data: UpdatePurchaseContractRequest
+  ): Promise<PurchaseContractDetailResponse> {
+    const response = await apiClient.put<SingleResponse<PurchaseContractDetailResponse>>(
+      CONTRACT_ENDPOINTS.PURCHASE_CONTRACT_DETAIL(id),
+      data
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Delete purchase contract (Admin/Agent only)
+   * Only allowed for DRAFT status (hard delete)
+   */
+  async deletePurchaseContract(id: string): Promise<void> {
+    await apiClient.delete(CONTRACT_ENDPOINTS.PURCHASE_CONTRACT_DETAIL(id));
+  },
+
+  /**
+   * Approve purchase contract (Admin/Agent only)
+   * Transitions: DRAFT -> WAITING_OFFICIAL
+   * If advancePaymentAmount > 0, auto-creates advance payment
+   */
+  async approvePurchaseContract(id: string): Promise<PurchaseContractDetailResponse> {
+    const response = await apiClient.post<SingleResponse<PurchaseContractDetailResponse>>(
+      CONTRACT_ENDPOINTS.PURCHASE_APPROVE(id)
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Mark paperwork complete (Admin/Agent only)
+   * Advance payment must be completed first
+   * Creates final payment if remaining amount > 0
+   * Transitions: WAITING_OFFICIAL -> PENDING_PAYMENT or COMPLETED
+   */
+  async markPurchasePaperworkComplete(id: string): Promise<PurchaseContractDetailResponse> {
+    const response = await apiClient.post<SingleResponse<PurchaseContractDetailResponse>>(
+      CONTRACT_ENDPOINTS.PURCHASE_COMPLETE_PAPERWORK(id)
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Cancel purchase contract (Customer/Owner only)
+   * Before payment: nothing happens
+   * After advance payment: refund to customer
+   * After final payment: not allowed (use void instead)
+   */
+  async cancelPurchaseContract(
+    id: string,
+    data: CancelPurchaseContractRequest
+  ): Promise<PurchaseContractDetailResponse> {
+    const response = await apiClient.post<SingleResponse<PurchaseContractDetailResponse>>(
+      CONTRACT_ENDPOINTS.PURCHASE_CANCEL(id),
+      data
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Void purchase contract (Admin only)
+   * No side effects, no money transfers
+   */
+  async voidPurchaseContract(id: string): Promise<PurchaseContractDetailResponse> {
+    const response = await apiClient.post<SingleResponse<PurchaseContractDetailResponse>>(
+      CONTRACT_ENDPOINTS.PURCHASE_VOID(id)
+    );
+    return response.data.data;
   },
 };
