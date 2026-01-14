@@ -222,7 +222,7 @@ export default function DepositContractDetailPage({ params }: { params: Promise<
             setData(res);
             setEditData({
                 customerId: res.customer.id,
-                agentId: res.agent.id,
+                agentId: res.agent?.id,
                 mainContractType: res.mainContractType,
                 depositAmount: res.depositAmount,
                 agreedPrice: res.agreedPrice,
@@ -287,7 +287,7 @@ export default function DepositContractDetailPage({ params }: { params: Promise<
     const handleCompletePaperwork = async () => {
         if (!confirm("Mark paperwork as complete?")) return;
         setActionLoading(true);
-        try { await contractService.markDepositPaperworkComplete(id); alert("✅ Completed!"); fetchData(); }
+        try { await contractService.completeDepositPaperwork(id); alert("✅ Completed!"); fetchData(); }
         catch (e: any) { alert(`❌ Complete Failed:\n${getErrorMessage(e)}`); } finally { setActionLoading(false); }
     };
 
@@ -434,7 +434,7 @@ export default function DepositContractDetailPage({ params }: { params: Promise<
                         {isEditing ? (
                             <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 border-dashed">
                                 <h4 className="text-sm font-bold text-blue-900 mb-3">Agent (Edit)</h4>
-                                <AsyncSelect label="" value={editData.agentId || ''} displayValue={`${data.agent.firstName} ${data.agent.lastName}`} onChange={(val) => handleEditChange('agentId', val)} fetchOptions={fetchAgents} placeholder="Search Agent..." />
+                                <AsyncSelect label="" value={editData.agentId || ''} displayValue={`${data.agent?.firstName} ${data.agent?.lastName}`} onChange={(val) => handleEditChange('agentId', val)} fetchOptions={fetchAgents} placeholder="Search Agent..." />
                             </div>
                         ) : (<PartyCard title="Agent" data={data.agent} type="user" />)}
                     </div>

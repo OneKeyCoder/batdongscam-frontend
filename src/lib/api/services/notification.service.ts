@@ -72,6 +72,7 @@ const NOTIFICATION_ENDPOINTS = {
 export const notificationService = {
   /**
    * Lấy danh sách thông báo (có phân trang & filter)
+   * Note: Backend returns `read` field, we map it to `isRead` for frontend consistency
    */
   async getMyNotifications(filters?: NotificationFilters): Promise<PaginatedResponse<NotificationItem>> {
     const params = {
@@ -84,6 +85,15 @@ export const notificationService = {
       NOTIFICATION_ENDPOINTS.LIST,
       { params }
     );
+    
+    // Map backend `read` field to frontend `isRead`
+    if (response.data.data) {
+      response.data.data = response.data.data.map((item: any) => ({
+        ...item,
+        isRead: item.read ?? item.isRead ?? false,
+      }));
+    }
+    
     return response.data;
   },
 

@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Wallet, Calendar, CreditCard, Download, Eye, Clock, Check, AlertCircle, FileText, Loader2 } from 'lucide-react';
+import Link from 'next/link';
+import { Wallet, Calendar, CreditCard, Download, Eye, Clock, Check, AlertCircle, FileText, Loader2, Building, ExternalLink } from 'lucide-react';
 import Badge from '@/app/components/ui/Badge';
 import Modal from '@/app/components/ui/Modal';
 import { paymentService, PaymentListItem, PaymentDetailResponse } from '@/lib/api/services/payment.service';
@@ -39,6 +40,13 @@ const statusLabels: Record<string, string> = {
   CANCELLED: 'Cancelled',
 };
 
+// Payment stats interface
+interface PaymentStats {
+  totalPending: number;
+  totalPaid: number;
+  overdueCount: number;
+}
+
 export default function MyPaymentsPage() {
   const { user } = useAuth();
   const [payments, setPayments] = useState<PaymentListItem[]>([]);
@@ -52,6 +60,10 @@ export default function MyPaymentsPage() {
   const [payingPaymentId, setPayingPaymentId] = useState<string | null>(null);
   const [processingPayment, setProcessingPayment] = useState(false);
   const [filter, setFilter] = useState<'all' | 'pending' | 'paid'>('all');
+  
+  // Stats calculated from all payments (not paginated)
+  const [stats, setStats] = useState<PaymentStats>({ totalPending: 0, totalPaid: 0, overdueCount: 0 });
+  const [loadingStats, setLoadingStats] = useState(true);
 
   const pageSize = 10;
   
@@ -60,13 +72,55 @@ export default function MyPaymentsPage() {
   const customerPayableTypes = ['DEPOSIT', 'MONTHLY', 'FULL_PAY', 'INSTALLMENT', 'ADVANCE'];
   const ownerPayableTypes = ['SERVICE_FEE'];
 
-  // Fetch payments from API
+  // Fetch stats (all payments) - only once on mount
+  useEffect(() => {
+    const fetchStats = async () => {
+      setLoadingStats(true);
+      try {
+        // Get all pending payments (OVERDUE is not a valid status, we check by dueDate)
+        const pendingRes = await paymentService.getMyPayments({
+          size: 1000, // Large enough to get all
+          statuses: ['PENDING', 'SYSTEM_PENDING'],
+        });
+        const pendingPayments = pendingRes.data || [];
+        const totalPending = pendingPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+        
+        // Calculate overdue count based on dueDate being before today
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const overdueCount = pendingPayments.filter(p => {
+          if (p.dueDate) {
+            const dueDate = new Date(p.dueDate);
+            dueDate.setHours(0, 0, 0, 0);
+            return dueDate < today;
+          }
+          return false;
+        }).length;
+
+        // Get all paid payments
+        const paidRes = await paymentService.getMyPayments({
+          size: 1000,
+          statuses: ['SUCCESS', 'SYSTEM_SUCCESS'],
+        });
+        const paidPayments = paidRes.data || [];
+        const totalPaid = paidPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+
+        setStats({ totalPending, totalPaid, overdueCount });
+      } catch (err) {
+        console.error('Failed to fetch payment stats:', err);
+      } finally {
+        setLoadingStats(false);
+      }
+    };
+    fetchStats();
+  }, []);
+
+  // Fetch payments for current page
   useEffect(() => {
     const fetchPayments = async () => {
       setLoading(true);
       setError('');
       try {
-        // Build status filter based on selected tab
         const statuses = filter === 'pending' 
           ? ['PENDING', 'SYSTEM_PENDING', 'OVERDUE'] 
           : filter === 'paid' 
@@ -89,15 +143,6 @@ export default function MyPaymentsPage() {
     };
     fetchPayments();
   }, [currentPage, filter]);
-
-  // Calculate stats from fetched data
-  const totalPending = payments
-    .filter(p => p.status === 'PENDING' || p.status === 'SYSTEM_PENDING' || p.status === 'OVERDUE')
-    .reduce((sum, p) => sum + (p.amount || 0), 0);
-  const totalPaid = payments
-    .filter(p => p.status === 'SUCCESS' || p.status === 'SYSTEM_SUCCESS')
-    .reduce((sum, p) => sum + (p.amount || 0), 0);
-  const overdueCount = payments.filter(p => p.status === 'OVERDUE').length;
 
   const handleViewDetail = async (paymentId: string) => {
     setLoadingDetail(true);
@@ -162,7 +207,9 @@ export default function MyPaymentsPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-500">Total Pending</p>
-              <p className="text-2xl font-bold text-orange-600 mt-1">{formatAmount(totalPending)}</p>
+              <p className="text-2xl font-bold text-orange-600 mt-1">
+                {loadingStats ? '...' : formatAmount(stats.totalPending)}
+              </p>
             </div>
             <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
               <Clock className="w-6 h-6 text-orange-600" />
@@ -173,7 +220,9 @@ export default function MyPaymentsPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-500">Total Paid</p>
-              <p className="text-2xl font-bold text-green-600 mt-1">{formatAmount(totalPaid)}</p>
+              <p className="text-2xl font-bold text-green-600 mt-1">
+                {loadingStats ? '...' : formatAmount(stats.totalPaid)}
+              </p>
             </div>
             <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
               <Check className="w-6 h-6 text-green-600" />
@@ -184,7 +233,9 @@ export default function MyPaymentsPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-500">Overdue</p>
-              <p className="text-2xl font-bold text-red-600 mt-1">{overdueCount} payments</p>
+              <p className="text-2xl font-bold text-red-600 mt-1">
+                {loadingStats ? '...' : `${stats.overdueCount} payments`}
+              </p>
             </div>
             <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
               <AlertCircle className="w-6 h-6 text-red-600" />
@@ -414,14 +465,50 @@ export default function MyPaymentsPage() {
 
             {/* Contract Info */}
             {selectedPayment.contractNumber && (
-              <div className="p-4 border rounded-lg">
+              <div className="p-4 border border-blue-100 bg-blue-50 rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
-                  <FileText className="w-4 h-4 text-gray-400" />
-                  <p className="text-sm font-medium text-gray-900">Related Contract</p>
+                  <FileText className="w-4 h-4 text-blue-600" />
+                  <p className="text-sm font-medium text-blue-800">Related Contract</p>
                 </div>
-                <p className="text-sm text-gray-600">{selectedPayment.contractNumber}</p>
-                {selectedPayment.propertyTitle && (
-                  <p className="text-sm text-gray-500">{selectedPayment.propertyTitle}</p>
+                {selectedPayment.contractId ? (
+                  <Link 
+                    href={`/my/contracts`}
+                    onClick={() => setSelectedPayment(null)}
+                    className="text-sm text-blue-700 hover:text-blue-900 font-medium flex items-center gap-1"
+                  >
+                    {selectedPayment.contractNumber}
+                    <ExternalLink className="w-3 h-3" />
+                  </Link>
+                ) : (
+                  <p className="text-sm text-gray-600">{selectedPayment.contractNumber}</p>
+                )}
+                {selectedPayment.contractType && (
+                  <Badge variant="info" className="mt-2">{selectedPayment.contractType}</Badge>
+                )}
+              </div>
+            )}
+
+            {/* Property Info */}
+            {selectedPayment.propertyTitle && (
+              <div className="p-4 border border-green-100 bg-green-50 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <Building className="w-4 h-4 text-green-600" />
+                  <p className="text-sm font-medium text-green-800">Related Property</p>
+                </div>
+                {selectedPayment.propertyId ? (
+                  <Link 
+                    href={`/property/${selectedPayment.propertyId}`}
+                    onClick={() => setSelectedPayment(null)}
+                    className="text-sm text-green-700 hover:text-green-900 font-medium flex items-center gap-1"
+                  >
+                    {selectedPayment.propertyTitle}
+                    <ExternalLink className="w-3 h-3" />
+                  </Link>
+                ) : (
+                  <p className="text-sm text-gray-600">{selectedPayment.propertyTitle}</p>
+                )}
+                {selectedPayment.propertyAddress && (
+                  <p className="text-xs text-gray-500 mt-1">{selectedPayment.propertyAddress}</p>
                 )}
               </div>
             )}

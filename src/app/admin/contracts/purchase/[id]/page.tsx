@@ -138,7 +138,7 @@ export default function PurchaseContractDetailPage({ params }: { params: Promise
             setData(res);
             setEditData({
                 customerId: res.customer.id,
-                agentId: res.agent.id,
+                agentId: res.agent?.id,
                 propertyValue: res.propertyValue,
                 advancePaymentAmount: res.advancePaymentAmount,
                 commissionAmount: res.commissionAmount,
@@ -182,7 +182,7 @@ export default function PurchaseContractDetailPage({ params }: { params: Promise
     const handleCompletePaperwork = async () => {
         if (!confirm("Mark paperwork as complete?")) return;
         setActionLoading(true);
-        try { await contractService.markPurchasePaperworkComplete(id); alert("✅ Completed!"); fetchData(); } catch (e: any) { alert(`❌ Complete Failed:\n${getErrorMessage(e)}`); } finally { setActionLoading(false); }
+        try { await contractService.completePurchasePaperwork(id); alert("✅ Completed!"); fetchData(); } catch (e: any) { alert(`❌ Complete Failed:\n${getErrorMessage(e)}`); } finally { setActionLoading(false); }
     };
 
     const handleVoid = async () => {
@@ -291,7 +291,7 @@ export default function PurchaseContractDetailPage({ params }: { params: Promise
                         {isEditing ? (
                             <div className="bg-green-50 border border-green-200 rounded-xl p-5 border-dashed">
                                 <h4 className="text-sm font-bold text-green-900 mb-3">Agent (Edit)</h4>
-                                <AsyncSelect label="" value={editData.agentId || ''} displayValue={`${data.agent.firstName} ${data.agent.lastName}`} onChange={(val) => handleEditChange('agentId', val)} fetchOptions={fetchAgents} placeholder="Search Agent..." />
+                                <AsyncSelect label="" value={editData.agentId || ''} displayValue={`${data.agent?.firstName} ${data.agent?.lastName}`} onChange={(val) => handleEditChange('agentId', val)} fetchOptions={fetchAgents} placeholder="Search Agent..." />
                             </div>
                         ) : (<PartyCard title="Agent" data={data.agent} type="user" />)}
                     </div>

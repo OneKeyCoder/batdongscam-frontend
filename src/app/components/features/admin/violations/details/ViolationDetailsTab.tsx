@@ -87,7 +87,7 @@ export default function ViolationDetailsTab({ data }: Props) {
                         </h3>
                         {data.reportedProperty?.id && (
                             <Link
-                                href={`/properties/${data.reportedProperty.id}`}
+                                href={`/property/${data.reportedProperty.id}`}
                                 className="inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-700 transition-colors"
                             >
                                 <ExternalLink className="w-3 h-3" />
@@ -105,7 +105,7 @@ export default function ViolationDetailsTab({ data }: Props) {
                         )}
                     </div>
                     {data.reportedProperty ? (
-                        <Link href={`/properties/${data.reportedProperty.id}`} className="block group">
+                        <Link href={`/property/${data.reportedProperty.id}`} className="block group">
                             <div className="flex gap-4">
                                 <div className="w-24 h-16 rounded-lg bg-gray-200 overflow-hidden shrink-0">
                                     {data.reportedProperty.thumbnailUrl ? (

@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNotificationOptional } from '@/contexts/NotificationContext';
 import { UserRole } from '@/lib/api/types';
 import {
   Building,
@@ -54,7 +55,7 @@ const roleMenuItems: Record<UserRole, MenuItem[]> = {
   ],
   SALESAGENT: [
     { href: '/my/profile', label: 'My Profile', icon: User },
-    { href: '/agent/assignments', label: 'Assignments', icon: Briefcase },
+    { href: '/my/assignments', label: 'Assignments', icon: Briefcase },
     { href: '/agent/appointments', label: 'Appointments', icon: Calendar },
     { href: '/agent/customers', label: 'Customers', icon: Users },
     { href: '/my/contracts', label: 'Contracts', icon: FileText },
@@ -85,15 +86,13 @@ export default function NavBar() {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  
+  // Use notification context for unread count (optional hook - won't throw if context not available)
+  const notificationContext = useNotificationOptional();
+  const unreadNotificationCount = notificationContext?.unreadCount ?? 0;
 
   // Get menu items based on user role
   const menuItems = user?.role ? roleMenuItems[user.role] : roleMenuItems.GUEST;
-  
-  // Debug logging
-  useEffect(() => {
-    console.log('NavBar - User state:', user);
-    console.log('NavBar - Menu items:', menuItems);
-  }, [user, menuItems]);
   
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -271,7 +270,9 @@ export default function NavBar() {
                 className="relative p-2 text-gray-600 hover:text-gray-900 transition-colors"
               >
                 <Bell className="w-5 h-5" />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-600 rounded-full"></span>
+                {unreadNotificationCount > 0 && (
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-600 rounded-full"></span>
+                )}
               </Link>
 
               {/* User Dropdown */}
