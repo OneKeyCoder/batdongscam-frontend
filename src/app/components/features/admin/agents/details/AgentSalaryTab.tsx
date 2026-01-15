@@ -79,12 +79,12 @@ export default function AgentSalaryTab({ agentId, month, year }: AgentSalaryTabP
                 <div className="flex justify-between items-center mb-4">
                     <h3 className="font-bold text-gray-900 text-sm">Salary Summary (Calculated from Payments)</h3>
 
-                    <button
+                    {/* <button
                         onClick={() => setIsPayModalOpen(true)}
                         className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm active:scale-95"
                     >
                         <Wallet className="w-3 h-3" /> Pay
-                    </button>
+                    </button> */}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
