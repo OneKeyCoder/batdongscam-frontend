@@ -8,6 +8,7 @@ import NavBar from '@/app/components/layout/NavBar';
 import Modal from '@/app/components/ui/Modal';
 import Badge from '@/app/components/ui/Badge';
 import Footer from '@/app/components/layout/Footer';
+import PropertyTimeline from '@/app/components/PropertyTimeline';
 import { propertyService, PropertyDetails } from '@/lib/api/services/property.service';
 import { appointmentService } from '@/lib/api/services/appointment.service';
 import { useAuth } from '@/contexts/AuthContext';
@@ -26,9 +27,9 @@ export default function PropertyDetailPage() {
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [previewDocument, setPreviewDocument] = useState<{url: string; name: string} | null>(null);
+  const [previewDocument, setPreviewDocument] = useState<{ url: string; name: string } | null>(null);
   const { user } = useAuth();
-  
+
   // Booking form state - simplified to match backend API
   const [bookingForm, setBookingForm] = useState({
     date: '',
@@ -39,13 +40,13 @@ export default function PropertyDetailPage() {
   const [bookingError, setBookingError] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   const [bookingSuccess, setBookingSuccess] = useState(false);
-  
+
   // Status change state (for property owners)
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState('');
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [statusError, setStatusError] = useState('');
-  
+
   // Owner can set these statuses
   const ownerStatusOptions = [
     { value: 'AVAILABLE', label: 'Available' },
@@ -53,7 +54,7 @@ export default function PropertyDetailPage() {
     { value: 'SOLD', label: 'Sold' },
     { value: 'RENTED', label: 'Rented' },
   ];
-  
+
   // Check if current user is the assigned sales agent
   const isAssignedAgent = user && property?.assignedAgent?.id === user.id;
 
@@ -61,7 +62,7 @@ export default function PropertyDetailPage() {
   useEffect(() => {
     const fetchProperty = async () => {
       if (!propertyId) return;
-      
+
       setIsLoading(true);
       setError('');
 
@@ -97,10 +98,10 @@ export default function PropertyDetailPage() {
   const handleBooking = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!propertyId || !bookingForm.date || !bookingForm.time) return;
-    
+
     setIsBooking(true);
     setBookingError('');
-    
+
     try {
       await appointmentService.createAppointment({
         propertyId,
@@ -108,7 +109,7 @@ export default function PropertyDetailPage() {
         preferredTime: bookingForm.time,
         message: bookingForm.customerRequirements || undefined,
       });
-      
+
       setBookingSuccess(true);
       setBookingForm({ date: '', time: '', customerRequirements: '' });
     } catch (err: any) {
@@ -166,7 +167,7 @@ export default function PropertyDetailPage() {
             alt={property.title}
             className="w-full h-full object-cover"
           />
-          
+
           {/* Navigation Arrows */}
           <button
             onClick={prevImage}
@@ -192,14 +193,13 @@ export default function PropertyDetailPage() {
               <button
                 key={media.id}
                 onClick={() => setCurrentImage(idx)}
-                className={`w-16 h-12 rounded-lg overflow-hidden border-2 transition-all ${
-                  currentImage === idx ? 'border-white' : 'border-transparent opacity-70 hover:opacity-100'
-                }`}
+                className={`w-16 h-12 rounded-lg overflow-hidden border-2 transition-all ${currentImage === idx ? 'border-white' : 'border-transparent opacity-70 hover:opacity-100'
+                  }`}
               >
-                <img 
-                  src={media.filePath || 'https://via.placeholder.com/150'} 
-                  alt="" 
-                  className="w-full h-full object-cover" 
+                <img
+                  src={media.filePath || 'https://via.placeholder.com/150'}
+                  alt=""
+                  className="w-full h-full object-cover"
                 />
               </button>
             ))}
@@ -231,7 +231,7 @@ export default function PropertyDetailPage() {
                 <AlertTriangle className="w-5 h-5 text-gray-600 group-hover:text-yellow-600" />
               </Link>
             )}
-            
+
             {/* Edit & Delete - Only for owner */}
             {user && user.id === property.owner.id && (
               <>
@@ -272,7 +272,7 @@ export default function PropertyDetailPage() {
                 </button>
               </>
             )}
-            
+
             {/* Create Contract - For any sales agent on AVAILABLE/APPROVED properties */}
             {user?.role === 'SALESAGENT' && ['AVAILABLE', 'APPROVED'].includes(property.status) && (
               <Link
@@ -304,8 +304,6 @@ export default function PropertyDetailPage() {
                 <p className="text-gray-600 flex items-center gap-2 mt-2">
                   <MapPin className="w-5 h-5 text-gray-400" />
                   {property.fullAddress}
-                  {/* For some reason the fucking seed data itself has wardName in the fullAddress so we comment this */}
-                  {/* {(property as any).wardName && `, ${(property as any).wardName}`} */}
                   {(property as any).districtName && `, ${(property as any).districtName}`}
                   {(property as any).cityName && `, ${(property as any).cityName}`}
                 </p>
@@ -333,6 +331,10 @@ export default function PropertyDetailPage() {
                   <p className="text-sm text-gray-500">Area</p>
                 </div>
               </div>
+
+              {/* [NEW] RENTAL TIMELINE */}
+              <PropertyTimeline propertyId={property.id} />
+
 
               {/* Description */}
               <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
@@ -407,10 +409,9 @@ export default function PropertyDetailPage() {
                   <div className="space-y-3">
                     {property.documentList.map((doc) => {
                       const handleDocClick = () => {
-                        // Open file in new tab - browser handles viewing/download
                         window.open(doc.filePath, '_blank', 'noopener,noreferrer');
                       };
-                      
+
                       return (
                         <button
                           key={doc.id}
@@ -442,9 +443,9 @@ export default function PropertyDetailPage() {
               {/* Contact Card */}
               <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 sticky top-24">
                 <h3 className="text-lg font-bold text-gray-900 mb-4">Property Owner</h3>
-                
+
                 {/* Owner Info - Primary */}
-                <Link 
+                <Link
                   href={`/profile/${property.owner.id}`}
                   className="flex items-center gap-4 mb-4 hover:bg-gray-50 p-3 rounded-lg transition-colors cursor-pointer"
                 >
@@ -564,7 +565,7 @@ export default function PropertyDetailPage() {
                 {bookingError}
               </div>
             )}
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Preferred Date *</label>
@@ -623,11 +624,11 @@ export default function PropertyDetailPage() {
 
       {/* Document Preview Modal */}
       {previewDocument && (
-        <div 
+        <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
           onClick={() => setPreviewDocument(null)}
         >
-          <div 
+          <div
             className="relative bg-white rounded-2xl w-[90%] h-[90%] max-w-6xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
@@ -691,27 +692,26 @@ export default function PropertyDetailPage() {
               {statusError}
             </div>
           )}
-          
+
           <p className="text-gray-600 text-sm">
             Select a new status for your property. This will affect how your property appears to potential buyers/renters.
           </p>
-          
+
           <div className="space-y-2">
             {ownerStatusOptions.map((option) => (
               <button
                 key={option.value}
                 onClick={() => setSelectedStatus(option.value)}
-                className={`w-full p-3 rounded-lg border text-left transition-colors ${
-                  selectedStatus === option.value
+                className={`w-full p-3 rounded-lg border text-left transition-colors ${selectedStatus === option.value
                     ? 'border-red-500 bg-red-50 text-red-700'
                     : 'border-gray-200 hover:border-gray-300 text-gray-700'
-                }`}
+                  }`}
               >
                 <span className="font-medium">{option.label}</span>
               </button>
             ))}
           </div>
-          
+
           <div className="flex gap-3 pt-4">
             <button
               onClick={() => {
@@ -728,10 +728,10 @@ export default function PropertyDetailPage() {
                   setShowStatusModal(false);
                   return;
                 }
-                
+
                 setIsUpdatingStatus(true);
                 setStatusError('');
-                
+
                 try {
                   const updated = await propertyService.updatePropertyStatus(propertyId, {
                     status: selectedStatus as any
