@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Eye, MoreVertical, Trash2, CheckCircle, XCircle } from 'lucide-react';
+import { Eye, MoreVertical, Trash2, CheckCircle, XCircle, AlertTriangle, AlertCircle } from 'lucide-react'; // Đã thêm icon
 import Badge from '@/app/components/ui/Badge';
 import Pagination from '@/app/components/Pagination';
 import { PropertyCard } from '@/lib/api/types';
@@ -31,6 +31,19 @@ export default function PropertiesTable({
     const [actionOpenId, setActionOpenId] = useState<string | null>(null);
     const [enrichedData, setEnrichedData] = useState<EnrichedProperty[]>([]);
     const [isHydrating, setIsHydrating] = useState(false);
+
+    const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+
+    useEffect(() => {
+        if (notification) {
+            const timer = setTimeout(() => setNotification(null), 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [notification]);
+
+    const showNotify = (type: 'success' | 'error', message: string) => {
+        setNotification({ type, message });
+    };
 
     useEffect(() => {
         const enrichData = async () => {
@@ -67,10 +80,11 @@ export default function PropertiesTable({
         if (confirm('Bạn có chắc chắn muốn xóa bất động sản này?')) {
             try {
                 await propertyService.deleteProperty(id);
+                showNotify('success', 'Xóa bất động sản thành công!'); 
                 onRefresh();
             } catch (error) {
                 console.error("Xóa thất bại", error);
-                alert("Xóa bất động sản thất bại");
+                showNotify('error', 'Xóa thất bại. Vui lòng thử lại.'); 
             }
         }
     };
@@ -78,9 +92,15 @@ export default function PropertiesTable({
     const handleUpdateStatus = async (id: string, status: 'APPROVED' | 'REJECTED') => {
         try {
             await propertyService.updatePropertyStatus(id, { status });
+            const actionText = status === 'APPROVED' ? 'Duyệt' : 'Từ chối';
+            showNotify('success', `Đã ${actionText} bất động sản thành công!`);
+
             onRefresh();
         } catch (error) {
             console.error("Cập nhật trạng thái thất bại", error);
+            showNotify('error', 'Cập nhật trạng thái thất bại.');
+        } finally {
+            setActionOpenId(null); 
         }
     };
 
@@ -106,18 +126,32 @@ export default function PropertiesTable({
         if (!typeName) return 'default';
         const name = typeName.toLowerCase();
 
-        if (name.includes('villa')) return 'purple';      
-        if (name.includes('apartment')) return 'blue';    
-        if (name.includes('house')) return 'success';    
-        if (name.includes('land')) return 'warning';      
-        if (name.includes('office')) return 'gray';       
-        if (name.includes('studio')) return 'pink';       
+        if (name.includes('villa')) return 'purple';
+        if (name.includes('apartment')) return 'blue';
+        if (name.includes('house')) return 'success';
+        if (name.includes('land')) return 'warning';
+        if (name.includes('office')) return 'gray';
+        if (name.includes('studio')) return 'pink';
 
-        return 'info'; 
+        return 'info';
     };
 
     return (
-        <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden flex flex-col min-h-[500px]">
+        <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden flex flex-col min-h-[500px] relative">
+            {notification && (
+                <div className={`fixed top-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border animate-in slide-in-from-right-10 duration-300 ${notification.type === 'success'
+                        ? 'bg-green-50 border-green-200 text-green-700'
+                        : 'bg-red-50 border-red-200 text-red-700'
+                    }`}>
+                    {notification.type === 'success' ? <CheckCircle className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+                    <div>
+                        <p className="text-sm font-bold">{notification.type === 'success' ? 'Thành công' : 'Lỗi'}</p>
+                        <p className="text-xs opacity-90">{notification.message}</p>
+                    </div>
+                    <button onClick={() => setNotification(null)} className="ml-2 hover:bg-black/5 p-1 rounded-full"><XCircle className="w-4 h-4" /></button>
+                </div>
+            )}
+
             <div className="overflow-x-auto flex-1">
                 <table className="w-full text-sm text-left text-gray-500">
                     <thead className="text-xs text-gray-700 uppercase bg-gray-50 border-b border-gray-200">

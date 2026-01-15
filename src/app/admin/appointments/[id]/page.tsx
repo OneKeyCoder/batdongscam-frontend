@@ -193,11 +193,8 @@ export default function AppointmentDetailPage({ params }: { params: Promise<{ id
             await assignmentService.assignAgentToViewing(id, null);
             alert("Agent removed!");
             
-            // Cập nhật UI ngay lập tức (Xóa salesAgent)
             setData(prev => prev ? ({ ...prev, salesAgent: undefined }) : null);
             setSelectedAgentId(''); 
-            
-            // KHÔNG gọi fetchDetail()
         } catch (error: any) {
             console.error(error);
             alert(`Failed to remove agent: ${getErrorMessage(error)}`);
