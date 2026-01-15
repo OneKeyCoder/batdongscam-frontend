@@ -118,8 +118,8 @@ export interface UnifiedContractListItem {
 
 export interface CreateDepositContractRequest {
   propertyId: string;
+  agentId?: string; // Required when user is Admin, otherwise defaults to current sales agent
   customerId: string;
-  agentId?: string; // Required when admin creates
   mainContractType: MainContractTypeEnum;
   depositAmount: number;
   agreedPrice: number;

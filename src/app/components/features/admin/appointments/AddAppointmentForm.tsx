@@ -86,20 +86,37 @@ export default function AddAppointmentForm({ onSuccess, onCancel }: AddAppointme
 
         setLoading(true);
         try {
-            const payload = {
+            const year = scheduledTime.getFullYear();
+            const month = String(scheduledTime.getMonth() + 1).padStart(2, '0');
+            const day = String(scheduledTime.getDate()).padStart(2, '0');
+            const hours = String(scheduledTime.getHours()).padStart(2, '0');
+            const minutes = String(scheduledTime.getMinutes()).padStart(2, '0');
+            const seconds = '00';
+
+            const localDateTime = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+
+            const payload: any = {
                 propertyId: formData.propertyId,
                 customerId: formData.customerId,
-                agentId: formData.agentId || undefined,
-                customerRequirements: formData.message,
-                requestedDate: scheduledTime.toISOString(),
+                requestedDate: localDateTime, 
             };
 
-            console.log("Submitting Payload:", payload);
+            // Only add agentId if provided (it's optional)
+            if (formData.agentId) {
+                payload.agentId = formData.agentId;
+            }
 
-            await appointmentService.createAppointment(payload as any);
+            // Only add customerRequirements if provided
+            if (formData.message && formData.message.trim()) {
+                payload.customerRequirements = formData.message.trim();
+            }
+
+            console.log("✅ Submitting Payload:", payload);
+
+            await appointmentService.createAppointment(payload);
             onSuccess();
         } catch (err: any) {
-            console.error("Create Appointment Error:", err);
+            console.error("❌ Create Appointment Error:", err);
             const msg = err.response?.data?.message || err.message || "Failed to create appointment.";
             setError(msg);
         } finally {

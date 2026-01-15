@@ -3,11 +3,20 @@
 import React, { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, Calendar, Mail, Phone, Edit, Star, User, MessageSquare, ClipboardList, FileText, Loader2, Save, X, AlertTriangle, CheckCircle } from 'lucide-react';
+import { 
+    ChevronLeft, Calendar, Mail, Phone, Edit, Star, User, 
+    MessageSquare, ClipboardList, FileText, Loader2, Save, X, 
+    AlertTriangle, CheckCircle, UserPlus 
+} from 'lucide-react';
 import Badge from '@/app/components/ui/Badge';
 import Modal from '@/app/components/ui/Modal';
-import { appointmentService, ViewingDetailsAdmin } from '@/lib/api/services/appointment.service';
-import { assignmentService, UpdateAppointmentDetailsRequest } from '@/lib/api/services/assignment.service';
+import { 
+    appointmentService, 
+    ViewingDetailsAdmin, 
+    UpdateAppointmentDetailsParams 
+} from '@/lib/api/services/appointment.service';
+import { assignmentService } from '@/lib/api/services/assignment.service';
+import { accountService, SaleAgentListItem } from '@/lib/api/services/account.service';
 
 export default function AppointmentDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
@@ -17,7 +26,7 @@ export default function AppointmentDetailPage({ params }: { params: Promise<{ id
 
     // State Editing
     const [isEditing, setIsEditing] = useState(false);
-    const [editData, setEditData] = useState<UpdateAppointmentDetailsRequest>({});
+    const [editData, setEditData] = useState<UpdateAppointmentDetailsParams>({});
     const [saving, setSaving] = useState(false);
 
     // State Cancel Modal
@@ -25,13 +34,19 @@ export default function AppointmentDetailPage({ params }: { params: Promise<{ id
     const [cancelReason, setCancelReason] = useState('');
     const [canceling, setCanceling] = useState(false);
 
-    // State Complete Loading
+    // State Complete
     const [completing, setCompleting] = useState(false);
 
-    // State Remove Agent Loading
+    // State Assign Agent Modal
+    const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+    const [agents, setAgents] = useState<SaleAgentListItem[]>([]);
+    const [selectedAgentId, setSelectedAgentId] = useState<string>('');
+    const [loadingAgents, setLoadingAgents] = useState(false);
+    const [assigning, setAssigning] = useState(false);
+
+    // State Remove Agent
     const [removingAgent, setRemovingAgent] = useState(false);
 
-    // Helper để lấy message lỗi từ API response
     const getErrorMessage = (error: any) => {
         return error?.response?.data?.message || "An error occurred. Please try again.";
     };
@@ -46,6 +61,9 @@ export default function AppointmentDetailPage({ params }: { params: Promise<{ id
                 customerInterestLevel: res.customerInterestLevel,
                 status: res.status
             });
+            if (res.salesAgent?.id) {
+                setSelectedAgentId(res.salesAgent.id);
+            }
         } catch (error) {
             console.error("Error:", error);
         } finally {
@@ -53,18 +71,36 @@ export default function AppointmentDetailPage({ params }: { params: Promise<{ id
         }
     };
 
+    const fetchAgents = async () => {
+        if (agents.length > 0) return;
+        setLoadingAgents(true);
+        try {
+            const res = await accountService.getAllSaleAgents({ limit: 100 }); 
+            setAgents(res.data);
+        } catch (error) {
+            console.error("Failed to load agents", error);
+        } finally {
+            setLoadingAgents(false);
+        }
+    };
+
     useEffect(() => { fetchDetail(); }, [id]);
+
+    useEffect(() => {
+        if (isAssignModalOpen) {
+            fetchAgents();
+        }
+    }, [isAssignModalOpen]);
 
     // --- ACTIONS ---
 
-    // 1. Save Edit
     const handleSave = async () => {
         setSaving(true);
         try {
-            await assignmentService.updateAppointmentDetails(id, editData);
+            await appointmentService.updateAppointmentDetails(id, editData);
             alert("Updated successfully!");
             setIsEditing(false);
-            fetchDetail();
+            fetchDetail(); // Save text/status thì fetch lại ok
         } catch (error: any) {
             console.error(error);
             alert(`Update failed: ${getErrorMessage(error)}`);
@@ -73,7 +109,6 @@ export default function AppointmentDetailPage({ params }: { params: Promise<{ id
         }
     };
 
-    // 2. Cancel Appointment
     const handleCancelSubmit = async () => {
         if (!cancelReason.trim()) return alert("Please enter a reason.");
         setCanceling(true);
@@ -90,7 +125,6 @@ export default function AppointmentDetailPage({ params }: { params: Promise<{ id
         }
     };
 
-    // 3. Complete Appointment (Đã cập nhật hiển thị lỗi chi tiết)
     const handleComplete = async () => {
         if (!confirm("Mark this appointment as completed?")) return;
         setCompleting(true);
@@ -100,21 +134,70 @@ export default function AppointmentDetailPage({ params }: { params: Promise<{ id
             fetchDetail();
         } catch (error: any) {
             console.error(error);
-            // Hiển thị message lỗi từ server (ví dụ: "Appointment time has not occurred yet")
             alert(`Failed to complete: ${getErrorMessage(error)}`);
         } finally {
             setCompleting(false);
         }
     };
 
-    // 4. Remove Agent
+    // --- LOGIC ASSIGN MỚI (FIXED) ---
+    const handleAssignSubmit = async () => {
+        if (!selectedAgentId) return alert("Please select an agent");
+        
+        setAssigning(true);
+        try {
+            // 1. Gọi API assign
+            await assignmentService.assignAgentToViewing(id, selectedAgentId);
+            
+            alert("Agent assigned successfully!");
+
+            // 2. Tìm thông tin agent vừa chọn
+            const selectedAgentInfo = agents.find(a => a.id === selectedAgentId);
+            
+            // 3. Cập nhật UI ngay lập tức (Local Update)
+            if (selectedAgentInfo) {
+                setData(prev => {
+                    if (!prev) return null;
+                    return {
+                        ...prev,
+                        salesAgent: {
+                            id: selectedAgentInfo.id,
+                            fullName: `${selectedAgentInfo.firstName} ${selectedAgentInfo.lastName}`,
+                            tier: selectedAgentInfo.tier,
+                            phoneNumber: 'N/A', 
+                            email: '',
+                            rating: selectedAgentInfo.rating,
+                            totalRates: selectedAgentInfo.totalRates || 0,
+                            avatarUrl: selectedAgentInfo.avatarUrl
+                        }
+                    };
+                });
+            }
+
+            // 4. Đóng modal và KHÔNG gọi fetchDetail()
+            setIsAssignModalOpen(false);
+            
+        } catch (error: any) {
+            console.error(error);
+            alert(`Failed to assign: ${getErrorMessage(error)}`);
+        } finally {
+            setAssigning(false);
+        }
+    };
+
+    // --- LOGIC REMOVE MỚI (FIXED) ---
     const handleRemoveAgent = async () => {
         if (!confirm("Remove assigned agent?")) return;
         setRemovingAgent(true);
         try {
             await assignmentService.assignAgentToViewing(id, null);
             alert("Agent removed!");
-            fetchDetail();
+            
+            // Cập nhật UI ngay lập tức (Xóa salesAgent)
+            setData(prev => prev ? ({ ...prev, salesAgent: undefined }) : null);
+            setSelectedAgentId(''); 
+            
+            // KHÔNG gọi fetchDetail()
         } catch (error: any) {
             console.error(error);
             alert(`Failed to remove agent: ${getErrorMessage(error)}`);
@@ -123,7 +206,7 @@ export default function AppointmentDetailPage({ params }: { params: Promise<{ id
         }
     };
 
-    // Navigation
+    // Navigation Helpers
     const handleViewAccount = (userId?: string, role?: string) => {
         if (!userId) return;
         const path = role === 'AGENT' ? 'agents' : role === 'CUSTOMER' ? 'customers' : 'property-owners';
@@ -149,7 +232,6 @@ export default function AppointmentDetailPage({ params }: { params: Promise<{ id
 
     return (
         <div className="max-w-7xl mx-auto pb-10 space-y-6">
-            {/* Header */}
             <div className="flex justify-between items-start">
                 <Link href="/admin/appointments" className="inline-flex items-center text-gray-500 hover:text-red-600 text-xs font-medium">
                     <ChevronLeft className="w-4 h-4 mr-1" /> Back to Appointments
@@ -158,8 +240,6 @@ export default function AppointmentDetailPage({ params }: { params: Promise<{ id
 
             {/* MAIN CARD */}
             <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm relative transition-all">
-
-                {/* Action Buttons Top-Right */}
                 <div className="absolute top-6 right-6 flex gap-2">
                     {isEditing ? (
                         <>
@@ -172,7 +252,6 @@ export default function AppointmentDetailPage({ params }: { params: Promise<{ id
                         </>
                     ) : (
                         <>
-                            {/* Nút Complete (Chỉ hiện khi chưa kết thúc) */}
                             {!isTerminated && (
                                 <button
                                     onClick={handleComplete}
@@ -183,14 +262,12 @@ export default function AppointmentDetailPage({ params }: { params: Promise<{ id
                                 </button>
                             )}
 
-                            {/* Nút Cancel (Chỉ hiện khi chưa kết thúc) */}
                             {!isTerminated && (
                                 <button onClick={() => setIsCancelModalOpen(true)} className="px-4 py-1.5 border border-red-200 text-red-600 text-xs font-bold rounded hover:bg-red-50 bg-white transition-colors">
                                     Cancel
                                 </button>
                             )}
 
-                            {/* Nút Edit */}
                             <button onClick={() => setIsEditing(true)} className="px-4 py-1.5 bg-red-600 text-white text-xs font-bold rounded hover:bg-red-700 flex items-center gap-1 transition-colors">
                                 <Edit className="w-3.5 h-3.5" /> Edit
                             </button>
@@ -201,7 +278,6 @@ export default function AppointmentDetailPage({ params }: { params: Promise<{ id
                 <h1 className="text-2xl font-bold text-gray-900 mb-2">Appointment Details</h1>
                 <p className="text-sm text-gray-500 mb-4">ID: {data.id}</p>
 
-                {/* Status */}
                 <div className="mb-6">
                     {isEditing ? (
                         <select
@@ -219,13 +295,12 @@ export default function AppointmentDetailPage({ params }: { params: Promise<{ id
                     )}
                 </div>
 
-                {/* Info Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-y-6 gap-x-12 mb-8">
                     <InfoRow icon={Calendar} label="Requested day" value={formatDate(data.requestedDate)} />
                     <InfoRow icon={Calendar} label="Confirmed day" value={formatDate(data.confirmedDate)} />
                     <InfoRow icon={Mail} label="Customer Email" value={data.customer?.email} />
                     <InfoRow icon={Phone} label="Customer Phone" value={data.customer?.phoneNumber} />
-                    <InfoRow icon={Star} label="Rating" value={data.rating?.toString()} />
+                    <InfoRow icon={Star} label="Rating" value={data.rating ? `${data.rating}/5` : 'N/A'} />
 
                     <div className="flex gap-3 items-start">
                         <User className="w-4 h-4 text-gray-500 mt-0.5" />
@@ -253,12 +328,10 @@ export default function AppointmentDetailPage({ params }: { params: Promise<{ id
                     </div>
                 </div>
 
-                {/* Full Content Blocks */}
                 <div className="space-y-4">
                     <ContentBlock icon={MessageSquare} title="Customer comment" content={data.comment} />
                     <ContentBlock icon={ClipboardList} title="Customer requirements" content={data.customerRequirements} />
 
-                    {/* Agent Notes - Editable */}
                     <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 transition-colors hover:border-gray-200">
                         <p className="text-xs font-bold text-gray-600 mb-2 flex items-center gap-2">
                             <Edit className="w-3.5 h-3.5" /> Agent notes
@@ -279,7 +352,6 @@ export default function AppointmentDetailPage({ params }: { params: Promise<{ id
                         )}
                     </div>
 
-                    {/* Viewing Outcome - Editable */}
                     <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 transition-colors hover:border-gray-200">
                         <p className="text-xs font-bold text-gray-600 mb-2 flex items-center gap-2">
                             <FileText className="w-3.5 h-3.5" /> Viewing outcome
@@ -299,7 +371,7 @@ export default function AppointmentDetailPage({ params }: { params: Promise<{ id
                 </div>
             </div>
 
-            {/* --- GRID CARDS (Property, Customer, Owner, Agent) --- */}
+            {/* --- GRID CARDS --- */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <CardContainer title="Property">
                     <div className="flex gap-3">
@@ -325,7 +397,7 @@ export default function AppointmentDetailPage({ params }: { params: Promise<{ id
                     <button onClick={() => handleViewAccount(data.propertyOwner?.id, 'OWNER')} className="w-full mt-5 py-2.5 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700 transition-colors">View Account</button>
                 </CardContainer>
 
-                {/* Sales Agent Card */}
+                {/* Sales Agent Card - Updated Actions */}
                 <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm h-full flex flex-col justify-between">
                     <div>
                         <h3 className="font-bold text-gray-900 mb-4 text-sm">Sales Agent</h3>
@@ -342,9 +414,13 @@ export default function AppointmentDetailPage({ params }: { params: Promise<{ id
                         ) : <p className="text-sm text-gray-500 italic py-4 text-center">No agent assigned</p>}
                     </div>
                     <div className="flex items-center gap-3 mt-5">
-                        <Link href={`/admin/appointments/${id}/change-agent`} className="flex-1 flex items-center justify-center py-2 border border-red-200 text-red-600 text-[10px] font-bold rounded-lg hover:bg-red-50 transition-colors">
+                        <button 
+                            onClick={() => setIsAssignModalOpen(true)}
+                            className="flex-1 flex items-center justify-center py-2 border border-red-200 text-red-600 text-[10px] font-bold rounded-lg hover:bg-red-50 transition-colors"
+                        >
                             {data.salesAgent ? 'Change agent' : 'Assign agent'}
-                        </Link>
+                        </button>
+
                         {data.salesAgent && (
                             <button onClick={handleRemoveAgent} disabled={removingAgent} className="flex-1 py-2 border border-red-200 text-red-600 text-[10px] font-bold rounded-lg hover:bg-red-50 transition-colors flex justify-center items-center gap-2">
                                 {removingAgent ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Remove agent'}
@@ -357,7 +433,7 @@ export default function AppointmentDetailPage({ params }: { params: Promise<{ id
                 </div>
             </div>
 
-            {/* --- CANCEL CONFIRMATION MODAL --- */}
+            {/* --- CANCEL MODAL --- */}
             <Modal isOpen={isCancelModalOpen} onClose={() => setIsCancelModalOpen(false)} title="Cancel Appointment">
                 <div className="space-y-4">
                     <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200 flex gap-3 text-sm text-yellow-800">
@@ -369,7 +445,7 @@ export default function AppointmentDetailPage({ params }: { params: Promise<{ id
                         <textarea
                             className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:border-red-500 outline-none focus:ring-1 focus:ring-red-200 transition-all"
                             rows={4}
-                            placeholder="Enter reason (e.g. Customer busy, Property sold)..."
+                            placeholder="Enter reason..."
                             value={cancelReason}
                             onChange={(e) => setCancelReason(e.target.value)}
                         />
@@ -378,6 +454,53 @@ export default function AppointmentDetailPage({ params }: { params: Promise<{ id
                         <button onClick={() => setIsCancelModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-bold">Close</button>
                         <button onClick={handleCancelSubmit} disabled={canceling} className="px-6 py-2 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700 disabled:opacity-50 flex items-center gap-2">
                             {canceling && <Loader2 className="w-3 h-3 animate-spin" />} Confirm Cancel
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* --- ASSIGN AGENT MODAL --- */}
+            <Modal isOpen={isAssignModalOpen} onClose={() => setIsAssignModalOpen(false)} title="Assign Sales Agent">
+                <div className="space-y-6">
+                    <div>
+                        <p className="text-sm text-gray-600 mb-4">Select a sales agent to assign to this appointment. The agent will receive a notification.</p>
+                        
+                        <label className="block text-sm font-bold text-gray-700 mb-2">Select Agent</label>
+                        
+                        {loadingAgents ? (
+                            <div className="flex items-center gap-2 text-sm text-gray-500 py-4"><Loader2 className="w-4 h-4 animate-spin" /> Loading agents...</div>
+                        ) : (
+                            <div className="relative">
+                                <select 
+                                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:border-red-500 focus:ring-1 focus:ring-red-200 outline-none appearance-none"
+                                    value={selectedAgentId}
+                                    onChange={(e) => setSelectedAgentId(e.target.value)}
+                                >
+                                    <option value="">-- Choose an agent --</option>
+                                    {agents.map(agent => (
+                                        <option key={agent.id} value={agent.id}>
+                                            {agent.firstName} {agent.lastName} ({agent.employeeCode || 'No Code'}) - Rating: {agent.rating || 0}
+                                        </option>
+                                    ))}
+                                </select>
+                                <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                                    <UserPlus className="w-4 h-4 text-gray-400" />
+                                </div>
+                            </div>
+                        )}
+                        {agents.length === 0 && !loadingAgents && (
+                            <p className="text-xs text-red-500 mt-2">No active agents found.</p>
+                        )}
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
+                        <button onClick={() => setIsAssignModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-bold">Cancel</button>
+                        <button 
+                            onClick={handleAssignSubmit} 
+                            disabled={assigning || !selectedAgentId} 
+                            className="px-6 py-2 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        >
+                            {assigning && <Loader2 className="w-3 h-3 animate-spin" />} Assign Agent
                         </button>
                     </div>
                 </div>

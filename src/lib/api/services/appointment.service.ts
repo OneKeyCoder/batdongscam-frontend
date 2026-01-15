@@ -8,16 +8,21 @@ const APPOINTMENT_ENDPOINTS = {
   CANCEL: (id: string) => `/appointment/${id}/cancel`,
   COMPLETE: (id: string) => `/appointment/${id}/complete`,
   RATE: (id: string) => `/appointment/${id}/rate`,
+  UPDATE_DETAILS: (id: string) => `/appointment/${id}`,
   ADMIN_VIEWING_LIST: '/appointment/admin/viewing-list',
   ADMIN_VIEWING_DETAILS: (id: string) => `/appointment/admin-agent/viewing-details/${id}`,
   AGENT_MY_VIEWING_LIST: '/assignments/my-viewing-list',
 };
 
+// --- REQUEST INTERFACES ---
+
 export interface CreateAppointmentRequest {
   propertyId: string;
-  preferredDate: string;
-  preferredTime: string;
+  preferredDate?: string;
+  preferredTime?: string;
   message?: string;
+  requestedDate: string;
+  customerRequirements?: string; 
   customerId?: string;
   agentId?: string;
 }
@@ -30,13 +35,16 @@ export interface RateAppointmentRequest {
 export interface CancelAppointmentRequest {
   reason?: string;
 }
-
-export interface RateAppointmentRequest {
-  rating: number; // 1-5
-  comment?: string;
+export interface UpdateAppointmentDetailsParams {
+  agentNotes?: string;
+  viewingOutcome?: string;
+  customerInterestLevel?: string; 
+  status?: 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
+  cancelledReason?: string;
 }
 
-// RESPONSE
+// --- RESPONSE INTERFACES (Giữ nguyên) ---
+
 export interface ViewingCard {
   id: string;
   title: string;
@@ -47,10 +55,8 @@ export interface ViewingCard {
   districtName?: string;
   cityName?: string;
   requestedDate: string;
-  // Rating info (for completed appointments)
   rating?: number;
   comment?: string;
-  // Agent info
   agentName?: string;
 }
 
@@ -172,7 +178,6 @@ export interface ViewingListItem {
   customerTier?: string;
   salesAgentName?: string;
   salesAgentTier?: string;
-  // Rating info for completed appointments
   rating?: number;
   comment?: string;
 }
@@ -288,6 +293,19 @@ export const appointmentService = {
   },
 
   /**
+   * Update appointment details (Agent Notes, Outcome, Status...)
+   * Backend dùng @RequestParam nên data phải nằm trong `params`
+   */
+  async updateAppointmentDetails(id: string, params: UpdateAppointmentDetailsParams): Promise<boolean> {
+    const response = await apiClient.patch<SingleResponse<boolean>>(
+      APPOINTMENT_ENDPOINTS.UPDATE_DETAILS(id),
+      null, 
+      { params: params } 
+    );
+    return response.data.data;
+  },
+
+  /**
    * Get viewing list with filters (Admin only)
    */
   async getViewingList(filters?: ViewingListFilters): Promise<PaginatedResponse<ViewingListItem>> {
@@ -295,13 +313,28 @@ export const appointmentService = {
       APPOINTMENT_ENDPOINTS.ADMIN_VIEWING_LIST,
       {
         params: filters,
+        paramsSerializer: (params) => {
+          const searchParams = new URLSearchParams();
+          Object.keys(params).forEach(key => {
+            const value = params[key];
+            if (value === undefined || value === null || value === '') return;
+
+            if (Array.isArray(value)) {
+              value.forEach(val => searchParams.append(key, val));
+            } else {
+              searchParams.append(key, value);
+            }
+          });
+          return searchParams.toString();
+        }
       }
     );
     return response.data;
   },
 
   /**
-   * Get my viewing list with filters (Agent only - returns only their assigned viewings)
+   * Get my viewing list with filters (Agent only)
+   * (Endpoint này có thể chưa khớp backend nhưng giữ lại theo yêu cầu)
    */
   async getMyViewingList(filters?: AgentViewingListFilters): Promise<PaginatedResponse<ViewingListItem>> {
     const response = await apiClient.get<PaginatedResponse<ViewingListItem>>(
@@ -321,4 +354,3 @@ export const appointmentService = {
     return response.data.data;
   },
 };
-
